@@ -1,0 +1,862 @@
+//! La feuille du passage : ce qui s'ouvre au clic sur un lien, avant la page.
+//!
+//! Direction « le passage d'abord, la page ensuite ». Le clic ouvre une feuille
+//! posee sur le fil : l'hote reel, le passage que l'agent a cite en grand dans
+//! la typographie de la vigie, ce qui l'entoure dans la page, et ce que l'agent
+//! demandait. La page entiere ne vient que sur un second geste, et la feuille
+//! devient alors le cadre autour d'elle.
+//!
+//! Ce module ne dessine rien : il compose (textes mis en page, aplats, zones
+//! cliquables) et `main.rs` pose le resultat dans la trame. Tout est en pixels
+//! d'ecran, l'echelle `e` deja appliquee. La composition ne depend que de
+//! l'entree et de la taille ; elle se garde tant qu'elles ne changent pas.
+
+use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Weight};
+
+use crate::formes::Forme;
+use crate::palette;
+use crate::passage::{self, Classe, Echec, Etat, Extrait, Page, Trouve};
+use crate::plan::Boite;
+use crate::vues;
+
+/// Ce que la feuille montre : le passage, ou la page ouverte.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Vue {
+    Passage,
+    Page,
+}
+
+/// Ce que chaque zone cliquable fait.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Action {
+    Fermer,
+    OuvrirPage,
+    Reessayer,
+    Reculer,
+    RevoirPassage,
+    ConfirmerLocal,
+    OuvrirAilleurs,
+}
+
+pub use crate::navigateur::Sonde;
+
+pub struct Entree<'a> {
+    pub url: &'a str,
+    /// L'adresse que la page affiche vraiment, quand Stone a suivi un lien : le
+    /// bandeau d'adresse dit toujours l'hote reel, jamais celui du clic.
+    pub courante: Option<&'a str>,
+    pub etat: &'a Etat,
+    pub page: Option<&'a Page>,
+    pub vue: Vue,
+    /// Les secondes depuis le clic : le chargement les dit, il ne tourne pas.
+    pub ecoule: f32,
+    /// Ce que la page ouverte a repondu a la recherche du passage.
+    pub sonde: Sonde,
+}
+
+pub struct Texte {
+    pub tampon: Buffer,
+    pub x: f32,
+    pub y: f32,
+    pub couleur: Color,
+}
+
+impl Texte {
+    /// La boite d'encre du texte : de quoi mesurer son contraste sur la capture.
+    pub fn boite(&self) -> Boite {
+        let mut l = 0.0f32;
+        let mut h = 0.0f32;
+        for r in self.tampon.layout_runs() {
+            l = l.max(r.line_w);
+            h = h.max(r.line_top + r.line_height);
+        }
+        Boite { x: self.x, y: self.y, l, h }
+    }
+
+    /// Les premiers signes, pour le journal.
+    pub fn debut(&self) -> String {
+        self.tampon.lines.iter().map(|l| l.text()).collect::<Vec<_>>().join(" ").chars().take(28).collect()
+    }
+}
+
+pub struct Composee {
+    /// Sous les textes : voile, carte, surbrillance, filets, boutons.
+    pub aplats: Vec<Forme>,
+    pub textes: Vec<Texte>,
+    pub cibles: Vec<(Boite, Action)>,
+    pub carte: Boite,
+    /// Le rectangle de la page, quand la page est ouverte.
+    pub zone_page: Option<Boite>,
+    /// La surbrillance : les lignes du passage, pour la mesure.
+    pub surbrillance: Vec<Boite>,
+    /// Le bloc du passage, bord compris.
+    pub bloc: Option<Boite>,
+}
+
+// Les mesures nominales, en points a l'echelle 1. Aucun corps nouveau : ceux
+// du systeme (20, 15, 13, 12).
+const CARTE_MAX: f32 = 620.0;
+const GOUTTIERE: f32 = 28.0;
+const GOUTTIERE_ETROITE: f32 = 16.0;
+const MARGE: f32 = 24.0;
+const MARGE_ETROITE: f32 = 20.0;
+const BOUTON: f32 = 28.0;
+const BOUTON_ACTION_H: f32 = 36.0;
+const GRAND: f32 = 20.0;
+const GRAND_H: f32 = 30.0;
+const LECTURE: f32 = 15.0;
+const LECTURE_H: f32 = 23.0;
+const REPERE: f32 = 13.0;
+const REPERE_H: f32 = 18.0;
+const PETIT: f32 = 12.0;
+const PETIT_H: f32 = 16.0;
+pub const SECONDE_LENTE: f32 = 10.0;
+
+/// L'ambre du passage cite : la seule teinte que le navigateur ajoute.
+const AMBRE: Color = Color::rgb(0xFF, 0xC8, 0x57);
+
+fn barlow(poids: Weight) -> Attrs<'static> {
+    Attrs::new().family(Family::Name("Barlow")).weight(poids)
+}
+
+fn poser_bloc(systeme: &mut FontSystem, texte: &str, corps: f32, haut: f32, poids: Weight, largeur: f32) -> (Buffer, f32) {
+    let mut b = Buffer::new(systeme, Metrics::new(corps, haut));
+    b.set_size(Some(largeur.max(1.0)), None);
+    b.set_text(texte, &barlow(poids), Shaping::Advanced, None);
+    b.shape_until_scroll(systeme, false);
+    let lignes = b.layout_runs().count().max(1) as f32;
+    (b, lignes * haut)
+}
+
+/// Une ligne qui ne se replie pas : sa largeur d'encre.
+fn mesurer(systeme: &mut FontSystem, texte: &str, corps: f32, haut: f32, poids: Weight) -> (Buffer, f32) {
+    let mut b = Buffer::new(systeme, Metrics::new(corps, haut));
+    b.set_size(None, None);
+    b.set_text(texte, &barlow(poids), Shaping::Advanced, None);
+    b.shape_until_scroll(systeme, false);
+    let l = b.layout_runs().map(|r| r.line_w).fold(0.0, f32::max);
+    (b, l)
+}
+
+/// Les boites, en pixels depuis le coin haut-gauche du tampon, de ce qu'occupe
+/// l'intervalle d'octets [debut, fin) du texte : une par ligne que l'intervalle
+/// traverse. Un lien coupe sur deux lignes en a deux.
+pub fn boites(tampon: &Buffer, texte: &str, debut: usize, fin: usize) -> Vec<Boite> {
+    let mut departs: Vec<usize> = Vec::new();
+    let mut o = 0;
+    for segment in texte.split('\n') {
+        departs.push(o);
+        o += segment.len() + 1;
+    }
+    let mut sortie = Vec::new();
+    for run in tampon.layout_runs() {
+        let base = departs.get(run.line_i).copied().unwrap_or(0);
+        let (mut x0, mut x1) = (f32::MAX, f32::MIN);
+        for g in run.glyphs {
+            if base + g.start < fin && base + g.end > debut {
+                x0 = x0.min(g.x);
+                x1 = x1.max(g.x + g.w);
+            }
+        }
+        if x1 > x0 {
+            sortie.push(Boite { x: x0, y: run.line_top, l: x1 - x0, h: run.line_height });
+        }
+    }
+    sortie
+}
+
+fn forme(boite: [f32; 4], c: Color, alpha: f32, rayon: f32) -> Forme {
+    Forme { boite: [boite[0].round(), boite[1].round(), boite[2].round(), boite[3].round()], couleur: palette::lineaire(c, alpha), rayon: [rayon, 0.0, 0.0, 0.0] }
+}
+
+/// Le bord du passage : celui qui contraste le plus avec le fond lu. La carte
+/// est sombre en theme sombre, claire en theme clair.
+fn bord_du_passage() -> Color {
+    if palette::contraste() {
+        return palette::encre1();
+    }
+    if palette::clair() { Color::rgb(0x1A, 0x1A, 0x1A) } else { Color::rgb(0xF2, 0xEF, 0xE9) }
+}
+
+/// La transparence de l'ambre. Les aplats se melangent en lineaire, ou 0,40
+/// eclaircit bien plus qu'en sRGB : le sombre est cale pour que le texte
+/// garde 4,5:1 sur la surbrillance (mesure sur la capture, voir le suivi).
+fn alpha_ambre() -> f32 {
+    if palette::contraste() {
+        0.0
+    } else if palette::clair() {
+        0.60
+    } else {
+        0.17
+    }
+}
+
+struct Corps<'a> {
+    systeme: &'a mut FontSystem,
+    e: f32,
+    x: f32,
+    l: f32,
+    textes: Vec<Texte>,
+    aplats: Vec<Forme>,
+    cibles: Vec<(Boite, Action)>,
+}
+
+impl<'a> Corps<'a> {
+    fn texte(&mut self, t: &str, corps: f32, haut: f32, poids: Weight, c: Color, y: f32) -> f32 {
+        let (b, h) = poser_bloc(self.systeme, t, corps * self.e, haut * self.e, poids, self.l);
+        self.textes.push(Texte { tampon: b, x: self.x, y, couleur: c });
+        h
+    }
+}
+
+/// Coupe pour tenir sur `n` lignes : le texte est deja borne en signes par
+/// l'extraction ; ceci ne sert qu'aux phrases de l'agent, d'une longueur libre.
+fn borner(s: &str, n: usize) -> String {
+    let c: Vec<char> = s.chars().collect();
+    if c.len() <= n {
+        return s.to_string();
+    }
+    let mut f = n;
+    while f > 0 && !c[f].is_whitespace() {
+        f -= 1;
+    }
+    format!("{}…", c[..f].iter().collect::<String>().trim_end())
+}
+
+fn kicker(etat: &Etat) -> (&'static str, bool) {
+    match etat {
+        Etat::Chargement => ("Lecture de la page", false),
+        Etat::Passage(_) => ("Passage cité", false),
+        Etat::Introuvable { .. } => ("Passage introuvable sur cette page", false),
+        Etat::SansPassage { .. } => ("Aucun passage cité", false),
+        Etat::Echec(_) => ("La page ne s’ouvre pas", true),
+        Etat::HorsLigne => ("Pas de connexion", true),
+        Etat::Connexion => ("La page demande une connexion", true),
+        Etat::Fichier => ("Cette adresse est un fichier", true),
+        Etat::Refuse(_) => ("Lien refusé", true),
+        Etat::Local => ("Ce lien vise cet ordinateur", true),
+        Etat::HorsMaquette => ("Page non préparée", false),
+        Etat::Redirection { contenu, .. } => kicker(contenu),
+    }
+}
+
+fn explication(etat: &Etat, hote: &str, ecoule: f32) -> Option<String> {
+    Some(match etat {
+        Etat::Chargement => {
+            if ecoule >= SECONDE_LENTE {
+                format!("{hote} répond lentement. Rien n’est ouvert : la vigie ne demande que le texte de la page.")
+            } else {
+                "La vigie demande le texte de la page, sans script ni cookie. Rien n’est ouvert.".to_string()
+            }
+        }
+        Etat::Echec(Echec::Absente) => "La page n’existe plus à cette adresse (erreur 404). L’agent l’a lue avant : elle a pu changer ou disparaître.".to_string(),
+        Etat::Echec(Echec::Certificat) => format!("Le certificat de {hote} n’est pas valide. La vigie ne continue pas."),
+        Etat::Echec(Echec::Delai) => format!("{hote} n’a pas répondu en {SECONDE_LENTE:.0} s."),
+        Etat::Echec(Echec::Serveur(c)) => format!("{hote} a répondu {c} au lieu d’une page. L’agent l’a lue avant : elle a pu changer ou se fermer."),
+        Etat::HorsLigne => "Cet ordinateur n’a pas de connexion. Rien n’a été chargé.".to_string(),
+        Etat::Connexion => "Cette page exige un compte. La vigie n’en a aucun de vous et ne se connecte pas.".to_string(),
+        Etat::Fichier => "Cette adresse envoie un fichier (PDF, archive ou programme). La vigie ne télécharge rien.".to_string(),
+        Etat::Refuse(s) => format!("Le schéma « {s}: » n’est jamais ouvert par la vigie, quelle que soit la page qui le cite."),
+        Etat::Local => format!("Cette adresse vise un service de votre propre machine ({hote}). La vigie demande avant de l’ouvrir."),
+        Etat::HorsMaquette => "Cette adresse n’est pas parmi les pages préparées pour la maquette. Au clic, la vigie lirait ici son texte.".to_string(),
+        _ => return None,
+    })
+}
+
+/// Compose la feuille. `l` et `h` sont la fenetre, en pixels.
+pub fn composer(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f32) -> Composee {
+    match entree.vue {
+        Vue::Passage => composer_passage(systeme, entree, l, h, e),
+        Vue::Page => composer_page(systeme, entree, l, h, e),
+    }
+}
+
+fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f32) -> Composee {
+    let etroite = l < 640.0 * e;
+    let gut = if etroite { GOUTTIERE_ETROITE } else { GOUTTIERE } * e;
+    let marge = if etroite { MARGE_ETROITE } else { MARGE } * e;
+    let cl = (CARTE_MAX * e).min(l - 2.0 * gut);
+    let cx = ((l - cl) * 0.5).round();
+    let iw = cl - 2.0 * marge;
+    let ix = cx + marge;
+    let a = passage::adresse(entree.url);
+    let classe = passage::classer(entree.url);
+    let (tete, alerte) = kicker(entree.etat);
+
+    let mut c = Corps { systeme, e, x: ix, l: iw, textes: Vec::new(), aplats: Vec::new(), cibles: Vec::new() };
+    // Le contenu se compose depuis y = 0, puis la carte se pose ou il faut.
+    let mut y = marge;
+
+    // Le mot de l'etat, a gauche ; la sortie, a droite.
+    let couleur_tete = if alerte { palette::alerte() } else { palette::encre1() };
+    let ty = y + (BOUTON * e - REPERE_H * e) * 0.5;
+    let (b_tete, l_tete) = mesurer(c.systeme, tete, REPERE * e, REPERE_H * e, Weight::MEDIUM);
+    c.textes.push(Texte { tampon: b_tete, x: ix, y: ty, couleur: couleur_tete });
+    if classe == Classe::NonChiffre {
+        let (b, _) = mesurer(c.systeme, "non chiffré", REPERE * e, REPERE_H * e, Weight::MEDIUM);
+        c.textes.push(Texte { tampon: b, x: ix + l_tete + 14.0 * e, y: ty, couleur: palette::alerte() });
+    }
+    let (b_esc, l_esc) = mesurer(c.systeme, "Échap", PETIT * e, PETIT_H * e, Weight::NORMAL);
+    let fermer = Boite { x: ix + iw - BOUTON * e, y, l: BOUTON * e, h: BOUTON * e };
+    let (b_x, l_x) = mesurer(c.systeme, "×", GRAND * e, GRAND_H * e, Weight::NORMAL);
+    c.textes.push(Texte { tampon: b_x, x: fermer.x + (fermer.l - l_x) * 0.5, y: y + (BOUTON * e - GRAND_H * e) * 0.5, couleur: palette::encre2() });
+    c.textes.push(Texte { tampon: b_esc, x: fermer.x - 8.0 * e - l_esc, y: y + (BOUTON * e - PETIT_H * e) * 0.5, couleur: palette::encre3() });
+    c.cibles.push((fermer, Action::Fermer));
+    y += BOUTON * e + 4.0 * e;
+
+    // L'adresse reelle : l'hote entier d'abord, le chemin ensuite, qui seul
+    // s'abrege. Une ecriture trompeuse se montre brute, et le dit.
+    // Un schema refuse n'a pas d'hote : son nom tient la place de l'hote.
+    let nom_hote = if a.hote.is_empty() { format!("{}:", a.schema) } else { a.hote.clone() };
+    let (b_hote, l_hote) = mesurer(c.systeme, &nom_hote, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
+    c.textes.push(Texte { tampon: b_hote, x: ix, y, couleur: palette::encre1() });
+    let reste = (iw - l_hote - 8.0 * e).max(0.0);
+    if reste > 40.0 * e && !matches!(entree.etat, Etat::Refuse(_)) {
+        let chemin = a.chemin.clone();
+        let (b, _) = vues::une_ligne(c.systeme, Metrics::new(REPERE * e, LECTURE_H * e), &barlow(Weight::NORMAL), &chemin, reste);
+        c.textes.push(Texte { tampon: b, x: ix + l_hote + 8.0 * e, y, couleur: palette::encre3() });
+    }
+    y += LECTURE_H * e;
+    if a.trompeuse {
+        y += 2.0 * e;
+        y += c.texte("Écriture trompeuse : l’adresse est montrée telle qu’elle est envoyée.", REPERE, REPERE_H, Weight::NORMAL, palette::alerte(), y);
+    }
+    if matches!(entree.etat, Etat::Refuse(_)) {
+        // Un schema refuse se montre en entier, brut : c'est tout ce qu'il y a a voir.
+        let brut = borner(entree.url, 160);
+        y += 2.0 * e;
+        y += c.texte(&brut, REPERE, REPERE_H, Weight::NORMAL, palette::encre3(), y);
+    }
+    if let Some(p) = entree.page.filter(|p| !p.titre.is_empty()).filter(|_| !matches!(entree.etat, Etat::Refuse(_) | Etat::Local)) {
+        let (b, _) = vues::une_ligne(c.systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &p.titre, iw);
+        c.textes.push(Texte { tampon: b, x: ix, y, couleur: palette::encre2() });
+        y += REPERE_H * e;
+    }
+    y += 12.0 * e;
+    c.aplats.push(forme([ix, y, iw, (1.0 * e).max(1.0)], palette::filet(), 1.0, 0.0));
+    y += 16.0 * e;
+
+    let mut surbrillance: Vec<Boite> = Vec::new();
+    let mut bloc: Option<Boite> = None;
+    // Une redirection se dit avant ce qu'on lit : de qui vient le texte.
+    let mut etat = entree.etat;
+    if let Etat::Redirection { vers, contenu } = entree.etat {
+        y += c.texte(&format!("Cette adresse renvoie vers {vers} : le texte ci-dessous vient de là."), REPERE, REPERE_H, Weight::MEDIUM, palette::encre1(), y);
+        y += 10.0 * e;
+        etat = contenu;
+    }
+
+    match etat {
+        Etat::Passage(x) => {
+            y = corps_du_passage(&mut c, x, y, &mut surbrillance, &mut bloc);
+            y = demande(&mut c, entree.page.map_or("", |p| p.invite.as_str()), y);
+        }
+        Etat::Introuvable { citation, debut_page } => {
+            y += c.texte("Le texte que l’agent avait cité n’est pas dans la page d’aujourd’hui.", LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+            y += 12.0 * e;
+            y = citation_non_verifiee(&mut c, citation, y);
+            if !debut_page.is_empty() {
+                y += 14.0 * e;
+                y += c.texte("Début de la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+                y += c.texte(&borner(debut_page, 200), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+            }
+        }
+        Etat::SansPassage { debut_page } => {
+            if let Some(p) = entree.page.filter(|p| !p.invite.is_empty()) {
+                y += c.texte("Ce que l’agent demandait à la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+                y += c.texte(&borner(&p.invite, 260), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre1(), y);
+                y += 14.0 * e;
+            }
+            y += c.texte("Il n’a cité aucun passage : la page s’ouvrirait en haut.", LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+            if !debut_page.is_empty() {
+                y += 14.0 * e;
+                y += c.texte("Début de la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+                y += c.texte(&borner(debut_page, 200), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+            }
+        }
+        _ => {
+            let hote = a.hote.clone();
+            if let Some(t) = explication(etat, &hote, entree.ecoule) {
+                y += c.texte(&t, LECTURE, LECTURE_H, Weight::NORMAL, palette::encre1(), y);
+            }
+            if matches!(etat, Etat::Chargement) {
+                y += 8.0 * e;
+                y += c.texte(&format!("{:.0} s", entree.ecoule.floor()), GRAND, GRAND_H, Weight::NORMAL, palette::encre2(), y);
+            }
+            // Meme quand la page ne s'ouvre pas, ce que l'agent avait cite reste
+            // lisible : c'est la promesse, la page n'en est que la preuve.
+            if matches!(etat, Etat::Echec(_) | Etat::HorsLigne | Etat::Connexion | Etat::Fichier) {
+                if let Some(cit) = entree.page.and_then(|p| p.citation.as_deref()) {
+                    y += 16.0 * e;
+                    y = citation_non_verifiee(&mut c, &passage::une_ligne_de(cit), y);
+                }
+            }
+        }
+    }
+
+    // Une phrase sur ce que la vigie a lu, quand elle a lu quelque chose.
+    if matches!(etat, Etat::Passage(_) | Etat::Introuvable { .. } | Etat::SansPassage { .. }) {
+        let rel = entree.page.map(|p| p.releve.as_str()).filter(|r| !r.is_empty());
+        let t = match rel {
+            Some(r) => format!("Texte lu sans script ni cookie, le {}. La page n’est pas ouverte.", date_fr(r)),
+            None => "Texte lu sans script ni cookie. La page n’est pas ouverte.".to_string(),
+        };
+        y += 16.0 * e;
+        y += c.texte(&t, PETIT, PETIT_H, Weight::NORMAL, palette::encre3(), y);
+    }
+
+    // Les actions.
+    y += 18.0 * e;
+    let actions = actions_de(etat, entree.ecoule);
+    let mut x_droite = ix + iw;
+    let mut boutons: Vec<(Boite, &str, Action, bool)> = Vec::new();
+    for (texte, action, primaire) in actions.iter().rev() {
+        let (_, lt) = mesurer(c.systeme, texte, REPERE * e, REPERE_H * e, Weight::MEDIUM);
+        let bl = lt + 28.0 * e;
+        let b = Boite { x: x_droite - bl, y, l: bl, h: BOUTON_ACTION_H * e };
+        boutons.push((b, texte, *action, *primaire));
+        x_droite -= bl + 10.0 * e;
+    }
+    for (b, texte, action, primaire) in boutons {
+        let (tampon, lt) = mesurer(c.systeme, texte, REPERE * e, REPERE_H * e, Weight::MEDIUM);
+        let couleur_texte = if primaire {
+            c.aplats.push(forme([b.x, b.y, b.l, b.h], palette::encre1(), 1.0, 8.0 * e));
+            palette::fond_octets()
+        } else {
+            c.aplats.push(forme([b.x, b.y, b.l, b.h], palette::filet(), 1.0, 8.0 * e));
+            c.aplats.push(forme([b.x + e, b.y + e, b.l - 2.0 * e, b.h - 2.0 * e], palette::plaque(), 1.0, 7.0 * e));
+            palette::encre1()
+        };
+        c.textes.push(Texte { tampon, x: b.x + (b.l - lt) * 0.5, y: b.y + (b.h - REPERE_H * e) * 0.5, couleur: couleur_texte });
+        c.cibles.push((b, action));
+    }
+    y += BOUTON_ACTION_H * e + marge;
+
+    // La carte, posee ou l'oeil tombe : un peu au-dessus du milieu.
+    let hauteur = y.min(h - 2.0 * gut);
+    let cy = ((h - hauteur) * 0.42).max(gut).round();
+    for t in &mut c.textes {
+        t.y += cy;
+    }
+    for a in &mut c.aplats {
+        a.boite[1] += cy;
+    }
+    for (b, _) in &mut c.cibles {
+        b.y += cy;
+    }
+    for b in &mut surbrillance {
+        b.y += cy;
+    }
+    if let Some(b) = bloc.as_mut() {
+        b.y += cy;
+    }
+    let carte = Boite { x: cx, y: cy, l: cl, h: hauteur };
+
+    let mut aplats = vec![
+        // Le voile : le fil reste en dessous, lisible a peine, et ne bouge pas.
+        Forme { boite: [0.0, 0.0, l, h], couleur: [0.0, 0.0, 0.0, if palette::clair() { 0.38 } else { 0.62 }], rayon: [0.0; 4] },
+        forme([cx - 2.0 * e, cy - 2.0 * e, cl + 4.0 * e, hauteur + 4.0 * e], palette::filet(), 1.0, 16.0 * e),
+        // La carte a le fond de la vigie, pas la plaque : l'encre-3 ne tient 4,5:1
+        // que sur lui (mesure sur la capture : 3,29:1 sur la plaque sombre).
+        forme([cx, cy, cl, hauteur], palette::fond_octets(), 1.0, 14.0 * e),
+    ];
+    aplats.extend(c.aplats);
+    Composee { aplats, textes: c.textes, cibles: c.cibles, carte, zone_page: None, surbrillance, bloc }
+}
+
+/// Ce que l'agent demandait a la page : la question que le passage repond.
+fn demande(c: &mut Corps, invite: &str, mut y: f32) -> f32 {
+    if invite.trim().is_empty() {
+        return y;
+    }
+    y += 14.0 * c.e;
+    y += c.texte("Ce que l’agent demandait à la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+    y += c.texte(&borner(&passage::une_ligne_de(invite), 190), REPERE, REPERE_H + 2.0, Weight::NORMAL, palette::encre2(), y);
+    y
+}
+
+/// Le passage en grand, entre le texte qui le precede et celui qui le suit.
+fn corps_du_passage(c: &mut Corps, x: &Extrait, mut y: f32, surbrillance: &mut Vec<Boite>, sortie: &mut Option<Boite>) -> f32 {
+    let e = c.e;
+    if !x.avant.is_empty() {
+        let t = format!("{}{}", if x.coupe_avant { "… " } else { "" }, x.avant);
+        y += c.texte(&t, LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+        y += 10.0 * e;
+    }
+    // Le bloc du passage : bord de 2 pt, fond de la vigie, ambre dessus, texte
+    // en encre-1 sur le tout.
+    let rem = 12.0 * e;
+    let (tampon, hauteur) = poser_bloc(c.systeme, &x.passage, GRAND * e, GRAND_H * e, Weight::NORMAL, c.l - 2.0 * rem);
+    let bloc = Boite { x: c.x, y, l: c.l, h: hauteur + 2.0 * rem };
+    *sortie = Some(bloc);
+    c.aplats.push(forme([bloc.x, bloc.y, bloc.l, bloc.h], bord_du_passage(), 1.0, 8.0 * e));
+    c.aplats.push(forme([bloc.x + 2.0 * e, bloc.y + 2.0 * e, bloc.l - 4.0 * e, bloc.h - 4.0 * e], palette::fond_octets(), 1.0, 6.0 * e));
+    let alpha = alpha_ambre();
+    if alpha > 0.0 {
+        for run in tampon.layout_runs() {
+            let (mut x0, mut x1) = (f32::MAX, 0.0f32);
+            for g in run.glyphs {
+                x0 = x0.min(g.x);
+                x1 = x1.max(g.x + g.w);
+            }
+            if x1 > x0 {
+                let b = Boite { x: c.x + rem + x0 - 3.0 * e, y: y + rem + run.line_top, l: x1 - x0 + 6.0 * e, h: run.line_height };
+                c.aplats.push(forme([b.x, b.y, b.l, b.h], AMBRE, alpha, 3.0 * e));
+                surbrillance.push(b);
+            }
+        }
+    } else {
+        // Contraste eleve : pas de teinte, un soulignement epais du systeme.
+        for run in tampon.layout_runs() {
+            let (mut x0, mut x1) = (f32::MAX, 0.0f32);
+            for g in run.glyphs {
+                x0 = x0.min(g.x);
+                x1 = x1.max(g.x + g.w);
+            }
+            if x1 > x0 {
+                let b = Boite { x: c.x + rem + x0, y: y + rem + run.line_top, l: x1 - x0, h: run.line_height };
+                c.aplats.push(forme([b.x, b.y + b.h - 3.0 * e, b.l, 3.0 * e], palette::encre1(), 1.0, 0.0));
+                surbrillance.push(b);
+            }
+        }
+    }
+    c.textes.push(Texte { tampon, x: c.x + rem, y: y + rem, couleur: palette::encre1() });
+    y += bloc.h;
+    if x.trouve == Trouve::Debut {
+        y += 6.0 * e;
+        y += c.texte("Seul le début de la citation est dans la page.", REPERE, REPERE_H, Weight::NORMAL, palette::encre3(), y);
+    }
+    if !x.apres.is_empty() {
+        y += 10.0 * e;
+        let t = format!("{}{}", x.apres, if x.coupe_apres { " …" } else { "" });
+        y += c.texte(&t, LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+    }
+    y
+}
+
+/// Ce que l'agent a cite, quand la page ne le confirme pas : un filet gris,
+/// jamais l'ambre, qui ne dit que « retrouve dans la page ».
+fn citation_non_verifiee(c: &mut Corps, citation: &str, mut y: f32) -> f32 {
+    let e = c.e;
+    y += c.texte("Cité par l’agent, d’après sa transcription, non vérifié dans la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+    y += 4.0 * e;
+    let (b, h) = poser_bloc(c.systeme, &borner(citation, 400), LECTURE * e, LECTURE_H * e, Weight::NORMAL, c.l - 16.0 * e);
+    c.aplats.push(forme([c.x, y, 2.0 * e, h], palette::encre3(), 1.0, e));
+    c.textes.push(Texte { tampon: b, x: c.x + 14.0 * e, y, couleur: palette::encre1() });
+    y + h
+}
+
+fn actions_de(etat: &Etat, ecoule: f32) -> Vec<(&'static str, Action, bool)> {
+    let fermer = ("Fermer", Action::Fermer, false);
+    match etat {
+        Etat::Passage(_) | Etat::Introuvable { .. } | Etat::SansPassage { .. } => vec![fermer, ("Ouvrir la page", Action::OuvrirPage, true)],
+        Etat::Redirection { contenu, .. } => actions_de(contenu, ecoule),
+        Etat::Chargement if ecoule >= SECONDE_LENTE => vec![("Annuler", Action::Fermer, false), ("Réessayer", Action::Reessayer, true)],
+        Etat::Chargement => vec![("Annuler", Action::Fermer, false)],
+        Etat::Echec(Echec::Delai) | Etat::HorsLigne => vec![fermer, ("Réessayer", Action::Reessayer, true)],
+        Etat::Fichier => vec![fermer, ("Ouvrir ailleurs", Action::OuvrirAilleurs, false)],
+        Etat::Local => vec![fermer, ("Ouvrir quand même", Action::ConfirmerLocal, true)],
+        _ => vec![fermer],
+    }
+}
+
+/// L'action que fait Entree dans la feuille.
+pub fn action_principale(etat: &Etat, ecoule: f32) -> Option<Action> {
+    actions_de(etat, ecoule).into_iter().find(|(_, _, primaire)| *primaire).map(|(_, a, _)| a)
+}
+
+/// L'action de la touche R, quand le reessai a un sens.
+pub fn reessai(etat: &Etat, ecoule: f32) -> Option<Action> {
+    actions_de(etat, ecoule).into_iter().find(|(_, a, _)| *a == Action::Reessayer).map(|(_, a, _)| a)
+}
+
+fn date_fr(iso: &str) -> String {
+    const MOIS: [&str; 12] = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+    let p: Vec<&str> = iso.split('-').collect();
+    match (p.first(), p.get(1).and_then(|m| m.parse::<usize>().ok()), p.get(2).and_then(|d| d.parse::<u32>().ok())) {
+        (Some(a), Some(m @ 1..=12), Some(d)) => format!("{} {} {}", if d == 1 { "1er".to_string() } else { d.to_string() }, MOIS[m - 1], a),
+        _ => iso.to_string(),
+    }
+}
+
+/// La page ouverte : un cadre autour d'une fenetre native que la vigie ne
+/// dessine pas. Le cadre est hors du rectangle de la page ; la page, ici, est
+/// un aplat gris qui le dit.
+fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f32) -> Composee {
+    let etroite = l < 640.0 * e;
+    let gut = if etroite { GOUTTIERE_ETROITE } else { GOUTTIERE } * e;
+    let a = passage::adresse(entree.courante.filter(|c| !c.is_empty()).unwrap_or(entree.url));
+    let mut textes: Vec<Texte> = Vec::new();
+    let mut aplats: Vec<Forme> = vec![forme([0.0, 0.0, l, h], palette::fond_octets(), 1.0, 0.0)];
+    let mut cibles: Vec<(Boite, Action)> = Vec::new();
+
+    // L'en-tete : reculer, avancer, l'adresse reelle, fermer.
+    let entete_h = 52.0 * e;
+    let by = (entete_h - BOUTON * e) * 0.5;
+    let recul = Boite { x: gut, y: by, l: BOUTON * e, h: BOUTON * e };
+    let avance = Boite { x: gut + BOUTON * e + 4.0 * e, y: by, l: BOUTON * e, h: BOUTON * e };
+    let ferme = Boite { x: l - gut - BOUTON * e, y: by, l: BOUTON * e, h: BOUTON * e };
+    for (b, signe, c) in [(recul, "‹", palette::encre1()), (avance, "›", palette::encre3()), (ferme, "×", palette::encre2())] {
+        let (t, lt) = mesurer(systeme, signe, GRAND * e, GRAND_H * e, Weight::NORMAL);
+        textes.push(Texte { tampon: t, x: b.x + (b.l - lt) * 0.5, y: b.y + (b.h - GRAND_H * e) * 0.5, couleur: c });
+    }
+    cibles.push((recul, Action::Reculer));
+    cibles.push((ferme, Action::Fermer));
+    let x0 = avance.x + avance.l + 14.0 * e;
+    let (b_esc, l_esc) = mesurer(systeme, "Échap", PETIT * e, PETIT_H * e, Weight::NORMAL);
+    textes.push(Texte { tampon: b_esc, x: ferme.x - 8.0 * e - l_esc, y: by + (BOUTON * e - PETIT_H * e) * 0.5, couleur: palette::encre3() });
+    let dispo = (ferme.x - 8.0 * e - l_esc - 14.0 * e - x0).max(40.0 * e);
+    let (b_hote, l_hote) = mesurer(systeme, &a.hote, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
+    textes.push(Texte { tampon: b_hote, x: x0, y: (entete_h - LECTURE_H * e) * 0.5, couleur: palette::encre1() });
+    let reste = dispo - l_hote - 8.0 * e;
+    if reste > 40.0 * e {
+        let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, LECTURE_H * e), &barlow(Weight::NORMAL), &a.chemin, reste);
+        textes.push(Texte { tampon: b, x: x0 + l_hote + 8.0 * e, y: (entete_h - LECTURE_H * e) * 0.5, couleur: palette::encre3() });
+    }
+    aplats.push(forme([0.0, entete_h - e, l, (1.0 * e).max(1.0)], palette::filet(), 1.0, 0.0));
+
+    // Le bandeau : le passage reste dit, meme si la page ne le montre pas.
+    let bandeau_h = 44.0 * e;
+    aplats.push(forme([0.0, entete_h, l, bandeau_h], palette::plaque(), 1.0, 0.0));
+    let (mot, citation, couleur_mot) = match entree.etat {
+        Etat::Passage(x) => ("Passage cité", Some(x.passage.clone()), palette::encre1()),
+        Etat::Introuvable { citation, .. } => ("Passage introuvable sur cette page", Some(citation.clone()), palette::encre1()),
+        Etat::SansPassage { .. } => ("Aucun passage cité", entree.page.map(|p| p.invite.clone()).filter(|s| !s.is_empty()), palette::encre1()),
+        Etat::Redirection { contenu, .. } => match &**contenu {
+            Etat::Passage(x) => ("Passage cité", Some(x.passage.clone()), palette::encre1()),
+            _ => ("Redirigée", None, palette::encre1()),
+        },
+        _ => ("Page", None, palette::encre1()),
+    };
+    let mot = match (entree.sonde, passage::etat_de_fond(entree.etat)) {
+        (Sonde::NonRetrouve, Etat::Passage(_) | Etat::Introuvable { .. }) => "Passage non retrouvé dans la page",
+        (Sonde::Indisponible, _) => "Le moteur de pages n’a pas démarré",
+        _ => mot,
+    };
+    let (b_mot, l_mot) = mesurer(systeme, mot, REPERE * e, REPERE_H * e, Weight::MEDIUM);
+    let ty = entete_h + (bandeau_h - REPERE_H * e) * 0.5;
+    let mut x = gut;
+    if matches!(entree.etat, Etat::Passage(_)) && !matches!(entree.sonde, Sonde::NonRetrouve | Sonde::Indisponible) {
+        // Le point d'ambre : le meme signe que dans le fil, avant le clic.
+        aplats.push(forme([x, entete_h + (bandeau_h - 8.0 * e) * 0.5, 8.0 * e, 8.0 * e], AMBRE, 1.0, 4.0 * e));
+        x += 16.0 * e;
+    }
+    textes.push(Texte { tampon: b_mot, x, y: ty, couleur: couleur_mot });
+    let revoir_t = "Revoir le passage";
+    let (b_rev, l_rev) = mesurer(systeme, revoir_t, REPERE * e, REPERE_H * e, Weight::MEDIUM);
+    let revoir = Boite { x: l - gut - l_rev - 24.0 * e, y: entete_h + (bandeau_h - BOUTON * e) * 0.5, l: l_rev + 24.0 * e, h: BOUTON * e };
+    aplats.push(forme([revoir.x, revoir.y, revoir.l, revoir.h], palette::filet(), 1.0, 7.0 * e));
+    aplats.push(forme([revoir.x + e, revoir.y + e, revoir.l - 2.0 * e, revoir.h - 2.0 * e], palette::plaque(), 1.0, 6.0 * e));
+    textes.push(Texte { tampon: b_rev, x: revoir.x + 12.0 * e, y: revoir.y + (revoir.h - REPERE_H * e) * 0.5, couleur: palette::encre1() });
+    cibles.push((revoir, Action::RevoirPassage));
+    if let Some(cit) = citation {
+        let debut = x + l_mot + 12.0 * e;
+        let largeur = (revoir.x - 14.0 * e - debut).max(0.0);
+        if largeur > 60.0 * e {
+            let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &format!("« {} »", cit), largeur);
+            textes.push(Texte { tampon: b, x: debut, y: ty, couleur: palette::encre2() });
+        }
+    }
+    aplats.push(forme([0.0, entete_h + bandeau_h - e, l, (1.0 * e).max(1.0)], palette::filet(), 1.0, 0.0));
+
+    // La page : un rectangle net, au-dessus de tout dessin de la vigie.
+    let haut_page = entete_h + bandeau_h;
+    let zone = Boite { x: 0.0, y: haut_page, l, h: h - haut_page };
+    aplats.push(forme([zone.x, zone.y, zone.l, zone.h], Color::rgb(0x9A, 0x98, 0x93), 1.0, 0.0));
+    let sombre = Color::rgb(0x1A, 0x1A, 0x1A);
+    let titre_zone = if entree.sonde == Sonde::Indisponible { "La page ne peut pas s’afficher" } else { "La page s’affiche ici" };
+    let (b1, l1) = mesurer(systeme, titre_zone, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
+    let pied_zone = if entree.sonde == Sonde::Indisponible {
+        "Le moteur de pages de Windows (WebView2) n’a pas démarré. Rien n’a été ouvert."
+    } else {
+        "Fenêtre native de la page : la capture de la vigie ne la montre pas."
+    };
+    let (b2, l2) = mesurer(systeme, pied_zone, REPERE * e, REPERE_H * e, Weight::NORMAL);
+    let (b3, l3) = if etroite {
+        mesurer(systeme, if entree.sonde == Sonde::Indisponible { "WebView2 n’a pas démarré." } else { "Fenêtre native, hors capture." }, REPERE * e, REPERE_H * e, Weight::NORMAL)
+    } else {
+        (b2, l2)
+    };
+    let milieu = zone.y + zone.h * 0.38;
+    textes.push(Texte { tampon: b1, x: (l - l1) * 0.5, y: milieu, couleur: sombre });
+    textes.push(Texte { tampon: b3, x: (l - l3) * 0.5, y: milieu + LECTURE_H * e + 2.0 * e, couleur: sombre });
+
+    Composee { aplats, textes, cibles, carte: Boite { x: 0.0, y: 0.0, l, h }, zone_page: Some(zone), surbrillance: Vec::new(), bloc: None }
+}
+
+#[cfg(test)]
+mod essais {
+    use super::*;
+
+    fn systeme() -> FontSystem {
+        let mut base = glyphon::fontdb::Database::new();
+        base.load_font_data(include_bytes!("../assets/fonts/Barlow-Regular.ttf").to_vec());
+        base.load_font_data(include_bytes!("../assets/fonts/Barlow-Medium.ttf").to_vec());
+        FontSystem::new_with_locale_and_db("fr-CA".to_string(), base)
+    }
+
+    fn tampon(s: &mut FontSystem, texte: &str, largeur: f32) -> Buffer {
+        let mut b = Buffer::new(s, Metrics::new(15.0, 23.0));
+        b.set_size(Some(largeur), None);
+        b.set_text(texte, &barlow(Weight::MEDIUM), Shaping::Advanced, None);
+        b.shape_until_scroll(s, false);
+        b
+    }
+
+    /// Le lien se retrouve par ses octets, sur la ligne ou il tombe : une boite
+    /// par ligne traversee, aucune ailleurs, meme apres un retour a la ligne du
+    /// texte et des accents qui decalent les octets des caracteres.
+    #[test]
+    fn un_lien_coupe_sur_deux_lignes_a_deux_boites_et_rien_d_autre() {
+        let mut s = systeme();
+        let texte = "Étude à lire\nvoir https://ecampusontario.pressbooks.pub/essentialsoflinguistics2/chapter/8-7-violating-vs-flouting-a-maxim/ puis fin";
+        let b = tampon(&mut s, texte, 300.0);
+        let debut = texte.find("https").unwrap();
+        let fin = debut + texte[debut..].find(' ').unwrap();
+        let boites = boites(&b, texte, debut, fin);
+        assert!(boites.len() >= 2, "{boites:?}");
+        // Toutes sous la premiere ligne du texte, dans la largeur du tampon.
+        assert!(boites.iter().all(|x| x.y >= 23.0 - 0.01 && x.x + x.l <= 300.5), "{boites:?}");
+        // Un intervalle vide ne laisse aucune boite.
+        assert!(super::boites(&b, texte, 3, 3).is_empty());
+        // Le premier mot, sur la premiere ligne, est a l'ecart du lien.
+        let mot = super::boites(&b, texte, 0, "Étude".len());
+        assert_eq!(mot.len(), 1);
+        assert!(mot[0].y < 1.0);
+    }
+
+    fn une_page() -> Page {
+        Page {
+            url: "https://docs.expo.dev/versions/latest/sdk/gl-view/".into(),
+            invite: "Quote exactly: whether 'Included in Expo Go'; the WebGL2 spec sentence; the list of unimplemented methods (all of them); the msaaSamples prop description and default.".into(),
+            citation: Some("It resembles a WebGL2RenderingContext in the WebGL 2 spec.".into()),
+            titre: "GLView - Expo documentation".into(),
+            texte: "WebGL API Once the component is mounted and the OpenGL ES context has been created, the gl object received through the onContextCreate prop becomes the interface to the OpenGL ES context, providing a WebGL API. It resembles a WebGL2RenderingContext in the WebGL 2 spec. Some older Android devices may not support WebGL2 features.".into(),
+            releve: "2026-10-29".into(),
+        }
+    }
+
+    fn tous_les_etats(p: &Page) -> Vec<Etat> {
+        let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
+        vec![
+            Etat::Passage(x.clone()),
+            Etat::Introuvable { citation: p.citation.clone().unwrap(), debut_page: "Début de la page d'aujourd'hui, qui a changé depuis la lecture de l'agent.".into() },
+            Etat::SansPassage { debut_page: "Début de la page.".into() },
+            Etat::Chargement,
+            Etat::Echec(Echec::Absente),
+            Etat::Echec(Echec::Certificat),
+            Etat::Echec(Echec::Delai),
+            Etat::Echec(Echec::Serveur(503)),
+            Etat::HorsLigne,
+            Etat::Connexion,
+            Etat::Fichier,
+            Etat::Refuse("javascript".into()),
+            Etat::Local,
+            Etat::HorsMaquette,
+            Etat::Redirection { vers: "www.expo.dev".into(), contenu: Box::new(Etat::Passage(x)) },
+        ]
+    }
+
+    /// C8 et C10 : a chaque echelle, en moitie d'ecran, en fenetre etroite et en
+    /// plein ecran, la carte tient dans la fenetre, tout controle fait 28 points
+    /// au moins dans les deux sens, rien de ce qu'elle ecrit ne passe son bord,
+    /// et la page ouverte laisse 60 % de la hauteur a la page.
+    #[test]
+    fn la_feuille_tient_dans_la_fenetre_a_chaque_echelle_et_chaque_etat() {
+        let mut s = systeme();
+        let p = une_page();
+        let etats = tous_les_etats(&p);
+        for (lp, hp) in [(766.4f32, 784.8f32), (480.0, 760.0), (1536.0, 792.8)] {
+            for e in [1.0f32, 1.25, 1.5, 2.0] {
+                let (l, h) = (lp * e, hp * e);
+                for etat in &etats {
+                    for vue in [Vue::Passage, Vue::Page] {
+                        let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat, page: Some(&p), vue, ecoule: 2.0, sonde: Sonde::Attente }, l, h, e);
+                        let nom = format!("{lp}x{hp} x{e} {etat:?} {vue:?}");
+                        if vue == Vue::Passage {
+                            assert!(c.carte.x >= 0.0 && c.carte.y >= 0.0 && c.carte.x + c.carte.l <= l + 0.5 && c.carte.y + c.carte.h <= h + 0.5, "carte hors fenetre : {nom} {:?}", c.carte);
+                            for t in &c.textes {
+                                let b = t.boite();
+                                assert!(b.x + b.l <= c.carte.x + c.carte.l + 0.5, "texte qui passe le bord : {nom} {:?}", t.debut());
+                                assert!(b.y + b.h <= c.carte.y + c.carte.h + 0.5 && b.y >= c.carte.y - 0.5, "texte hors de la carte : {nom} {:?}", t.debut());
+                            }
+                        } else {
+                            let z = c.zone_page.expect("la page a son rectangle");
+                            assert!(z.h >= 0.6 * h, "page trop basse : {nom} {z:?}");
+                            assert!(z.x + z.l <= l + 0.5 && z.y + z.h <= h + 0.5);
+                        }
+                        assert!(!c.cibles.is_empty(), "aucune sortie : {nom}");
+                        for (b, a) in &c.cibles {
+                            assert!(b.l >= 28.0 * e - 0.5 && b.h >= 28.0 * e - 0.5, "cible sous 28 points : {nom} {a:?} {b:?}");
+                            assert!(b.x >= -0.5 && b.x + b.l <= l + 0.5 && b.y >= -0.5 && b.y + b.h <= h + 0.5, "cible hors fenetre : {nom} {a:?}");
+                        }
+                        assert!(c.cibles.iter().any(|(_, a)| *a == Action::Fermer || *a == Action::Reculer), "pas de sortie : {nom}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Le temoin du test ci-dessus : une carte qui ignore la fenetre, sur un
+    /// ecran de 300 pixels, est bien vue comme debordante.
+    #[test]
+    fn le_temoin_de_la_fenetre_tombe_sur_une_fenetre_trop_petite() {
+        let mut s = systeme();
+        let p = une_page();
+        let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
+        let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat: &Etat::Passage(x), page: Some(&p), vue: Vue::Passage, ecoule: 0.0, sonde: Sonde::Attente }, 300.0, 300.0, 1.0);
+        // La hauteur d'un passage ne tient pas dans 300 points : le test
+        // ci-dessus le verrait comme « carte hors fenetre ».
+        assert!(c.carte.y + c.carte.h > 300.0 || c.textes.iter().any(|t| t.boite().y + t.boite().h > 300.0));
+    }
+
+    #[test]
+    fn la_date_se_dit_en_francais() {
+        assert_eq!(date_fr("2026-10-29"), "29 octobre 2026");
+        assert_eq!(date_fr("2026-11-01"), "1er novembre 2026");
+        assert_eq!(date_fr("n'importe quoi"), "n'importe quoi");
+    }
+
+    #[test]
+    fn borner_coupe_sur_un_mot_et_le_dit() {
+        assert_eq!(borner("court", 20), "court");
+        let b = borner("un deux trois quatre cinq six sept", 14);
+        assert!(b.ends_with('…') && b.chars().count() <= 15, "{b}");
+        assert!(!b.contains("troi ") && b.starts_with("un deux"));
+    }
+
+    #[test]
+    fn chaque_etat_a_une_sortie() {
+        let pas_de_page: Vec<Etat> = vec![
+            Etat::Chargement,
+            Etat::Echec(Echec::Absente),
+            Etat::Echec(Echec::Certificat),
+            Etat::Echec(Echec::Delai),
+            Etat::HorsLigne,
+            Etat::Connexion,
+            Etat::Fichier,
+            Etat::Refuse("file".into()),
+            Etat::Local,
+            Etat::HorsMaquette,
+            Etat::SansPassage { debut_page: String::new() },
+            Etat::Introuvable { citation: "x".into(), debut_page: String::new() },
+        ];
+        for e in &pas_de_page {
+            let a = actions_de(e, 0.0);
+            assert!(a.iter().any(|(_, act, _)| *act == Action::Fermer), "{e:?} sans sortie");
+        }
+        // Le chargement qui dure propose de recommencer ; au debut, pas.
+        assert!(!actions_de(&Etat::Chargement, 1.0).iter().any(|(_, a, _)| *a == Action::Reessayer));
+        assert!(actions_de(&Etat::Chargement, 11.0).iter().any(|(_, a, _)| *a == Action::Reessayer));
+        // Le schema refuse n'offre rien d'autre que fermer.
+        assert_eq!(actions_de(&Etat::Refuse("javascript".into()), 0.0).len(), 1);
+    }
+
+    #[test]
+    fn le_chargement_dit_le_temps_et_ne_tourne_pas() {
+        let t = explication(&Etat::Chargement, "a.org", 2.0).unwrap();
+        assert!(!t.contains("lentement"));
+        let t = explication(&Etat::Chargement, "a.org", 12.0).unwrap();
+        assert!(t.contains("a.org répond lentement"));
+    }
+}

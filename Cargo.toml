@@ -1,0 +1,51 @@
+[package]
+name = "vigie"
+version = "0.3.0"
+edition = "2021"
+description = "Regarder penser les agents, en direct"
+license = "MIT"
+
+[dependencies]
+# Les quatre versions sont accordees entre elles : glyphon 0.12 impose wgpu 30
+# et cosmic-text 0.19, et winit 0.30 est celle contre laquelle il est teste.
+# C'est exactement la pile eprouvee dans veilleuse (ARCHITECTURE.md §0).
+winit = "0.30"
+wgpu = "=30.0.1"
+glyphon = "0.12"
+pollster = "0.4"
+# Les transcriptions sont du JSON par ligne. Les analyser a la main serait
+# fragile pour rien : on ne cherche que quelques champs dans des objets qui
+# changent de forme selon le type d'entree.
+serde_json = "1"
+# Ce que le catalogue garde d'un lancement a l'autre s'ecrit tel quel, sans
+# traduction a la main : la derivation vient avec serde_json, deja la.
+serde = { version = "1", features = ["derive"] }
+png = "0.17"
+# Les images que regardent les agents arrivent en base64 dans les
+# transcriptions : en PNG le plus souvent, en JPEG ou WebP selon l'outil qui
+# les a produites. Ecrire ces decodeurs n'aurait aucun sens ; la reduction a la
+# taille d'affichage vient avec.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# La lecture d'une page au clic : un client synchrone, sans moteur asynchrone,
+# dont le resolveur se remplace (refus des adresses privees a la resolution).
+# TLS par rustls ; ni compression, ni cookies, ni mandataire pris dans
+# l'environnement.
+# La page, au second geste seulement : WebView2 par wry, dans une fenetre enfant
+# de la fenetre winit (essai de design/navigateur/tour-01/essai).
+wry = "0.57"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_HiDpi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+] }
+
+[profile.release]
+opt-level = 2
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"

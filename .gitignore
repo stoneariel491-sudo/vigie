@@ -1,0 +1,14 @@
+/target
+/dist
+/captures
+/design/tours/*/captures
+/design/tours/*/donnees/projects
+/design/tours/*/donnees/vigie
+/design/tours/*/donnees-vide
+/design/tours/*/*/captures
+/design/tours/*/*/*/captures
+/design/navigateur/*/captures
+/design/navigateur/*/donnees/projects
+/design/navigateur/*/donnees/vigie
+/design/navigateur/*/donnees-vide
+/design/navigateur/*/outils/.venv
