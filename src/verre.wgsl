@@ -1,6 +1,6 @@
 // Le verre de la visionneuse : le fond flou et les plaques.
 //
-// La recette est celle du verre ARBITREE de veilleuse (veilleuse/DECISION.md,
+// La recette est celle du verre ARBITREE de veilleuse (son DECISION.md,
 // « Pour l'integrateur », et src/galet.wgsl, `couleur_verre`) : une couche
 // floutee en lineaire, sa vibrance, une teinte noire posee sur les octets
 // ENCODES, et au biseau la refraction de Snell sur la couche nette, la

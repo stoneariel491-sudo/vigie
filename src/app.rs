@@ -31,7 +31,7 @@ pub fn figee() -> Option<PathBuf> {
 /// cet instant : l'etat d'un chantier (« en cours » trente minutes apres sa
 /// derniere ecriture) et les titres de jour (« Aujourd'hui ») dependent de
 /// l'heure, et deux rendus d'une copie figee faits a une heure d'ecart, ou un
-/// autre jour, ne montraient plus le meme ecran (cadre du tour 00, §8.2).
+/// autre jour, ne montraient plus le meme ecran.
 pub fn maintenant() -> std::time::SystemTime {
     match std::env::var("VIGIE_MAINTENANT").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
         Some(s) => std::time::UNIX_EPOCH + std::time::Duration::from_secs(s),

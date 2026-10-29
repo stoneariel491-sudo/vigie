@@ -73,9 +73,9 @@ const INTERLIGNE: f32 = 23.0;
 const COLONNE_MAX: f32 = 760.0;
 /// La mesure de ce qui se lit en continu : la parole, la pensee. 45 a 75
 /// signes par ligne (Bringhurst, §2.1.2) ; Barlow avance de 0,4123 a 0,4208 em
-/// par signe (systeme.md §2), et 464 points font 75 signes de 15 points au
+/// par signe, et 464 points font 75 signes de 15 points au
 /// plus. Les 760 points de la colonne en faisaient 120, et masquer la barre
-/// portait la parole de 59 a 89 signes en moitie d'ecran (juge-design.md, M3) :
+/// portait la parole de 59 a 89 signes en moitie d'ecran :
 /// la place que la barre rend va aux gestes et aux images, pas a la ligne.
 const MESURE: f32 = 464.0;
 /// Le bloc large : la bande, l'en-tete, les listes et la page d'un chantier.
@@ -256,7 +256,7 @@ struct ImagePosee {
     largeur: f32,
     hauteur: f32,
     /// Ce qui dit que deux images sont la meme : un `cp` la refait sous un
-    /// autre nom, et le fil la montrait deux fois (cadre, constat 7).
+    /// autre nom, et le fil la montrait deux fois.
     empreinte: u64,
     /// Creee a la premiere apparition a l'ecran, a la taille exacte
     /// d'affichage, et refaite si cette taille change.
@@ -379,7 +379,7 @@ struct Vigie {
     /// « Projets », le titre du groupe de la barre, pose une fois par echelle.
     groupe_projets: Option<Buffer>,
     /// Ce que fait le bouton de la barre, dit a son survol avec sa touche :
-    /// `Ctrl` + `B` ne s'ecrivait que dans le LISEZ-MOI (juge-design.md, m2).
+    /// `Ctrl` + `B` ne s'ecrivait que dans le LISEZ-MOI.
     /// La cle est l'etat de la barre que le texte decrit.
     bulle: Option<(bool, Buffer, f32)>,
     /// Le contraste eleve de Windows, ou --contraste-eleve.
@@ -448,7 +448,7 @@ struct Vigie {
     /// Le fil a fini de lire ce que le fichier contenait a l'ouverture
     /// (suivi::Nouvelle::Lu). Une seconde sans bloc ne le prouvait pas : sur
     /// une machine chargee, la capture partait sur un fil a moitie lu et
-    /// `--defiler` butait sur son debut (juge-technique.md, §4).
+    /// `--defiler` butait sur son debut.
     fil_lu: bool,
     /// Le haut voulu du fil apres un clic sur une vignette, tant qu'on n'a
     /// pas defile soi-meme.
@@ -936,7 +936,7 @@ impl Vigie {
         }
     }
 
-    /// « design-de-l-application  ·  cours-llm », ou l'on est, puis « 372
+    /// « design-de-l-application  ·  mon-projet », ou l'on est, puis « 372
     /// gestes, 13 messages, 29 images », ce que le fil contient, compte sur
     /// les blocs recus.
     fn libelle_fil(&self) -> (String, String) {
@@ -964,9 +964,9 @@ impl Vigie {
         (lieu, parties.join("  ·  "))
     }
 
-    /// « 7 agents · 29 images · lancé aujourd'hui à 09:49 · cours-llm ».
+    /// « 7 agents · 29 images · lancé aujourd'hui à 09:49 · mon-projet ».
     /// Pendant la premiere lecture, aucun compte partiel n'est montre comme
-    /// un vrai : « lecture des agents, 3 sur 7 » (cadre, C8).
+    /// un vrai : « lecture des agents, 3 sur 7 ».
     fn resume_chantier(&self, id: &str) -> String {
         let mut parties: Vec<String> = Vec::new();
         let c = self.catalogue.chantier(id);
@@ -1046,7 +1046,7 @@ impl Vigie {
 
         // Le lieu d'un fil, le chantier et son projet, au corps du titre : a
         // 13 points, il ne se lisait pas sur une capture reduite au quart, le
-        // seuil du coup d'oeil (cadre, C6 ; epreuve, tache 4), ou le titre en
+        // seuil du coup d'oeil, ou le titre en
         // 20 se lisait de justesse. Le titre le domine par sa graisse et son
         // encre. Les comptes qui suivent gardent le corps des reperes : ils ne
         // se lisent pas de loin.
@@ -1141,7 +1141,7 @@ impl Vigie {
         for _ in 0..BLOCS_PAR_TRAME {
             let Some(mut b) = self.en_attente.pop_front() else { break };
             // Le nom de l'agent en tete d'un fil vide redisait le titre de
-            // l'en-tete, juste au-dessus (juge-design.md, m10). Il ne se montre
+            // l'en-tete, juste au-dessus. Il ne se montre
             // que quand le direct passe d'un agent a un autre.
             if b.registre == Registre::Releve && self.poses.is_empty() {
                 continue;
@@ -1306,7 +1306,7 @@ impl Vigie {
     /// Le catalogue a change : les onglets, la liste et l'en-tete se refont
     /// s'ils le doivent, et seulement alors.
     fn catalogue_change(&mut self) {
-        // --onglet=Relais doit trouver relais : la casse d'un nom tape a la
+        // --onglet=Projet doit trouver projet : la casse d'un nom tape a la
         // main n'est pas une raison de montrer un projet inconnu.
         if let Vue::Liste(p) = &self.vue {
             if let Some(q) = self.catalogue.projets().into_iter().find(|q| q.eq_ignore_ascii_case(p) && q != p) {
@@ -1317,8 +1317,7 @@ impl Vigie {
             self.montrer_onglet_actif();
         }
         // « Projets » dit qu'il lit tant que le premier parcours n'est pas
-        // fini : la barre se remplissait sous les yeux sans le dire
-        // (juge-design.md, m6).
+        // fini : la barre se remplissait sous les yeux sans le dire.
         self.groupe_projets = None;
         self.poser_liste();
         self.poser_entete();
@@ -1731,7 +1730,7 @@ impl Vigie {
         }
         // Rappelee dans une fenetre etroite, elle a servi : elle part, que le
         // projet vienne d'un clic ou d'une touche. Ctrl + 2 la laissait sur la
-        // liste, voilee (epreuve.md, tache 1).
+        // liste, voilee.
         if self.barre_etroite() && self.barre_rappelee {
             self.barre_rappelee = false;
             self.viser_barre();
@@ -2760,12 +2759,12 @@ impl Vigie {
                     )
                 },
             ),
-            // Le direct sans agent : un etat, et ce qui va suivre (cadre, C8).
+            // Le direct sans agent : un etat, et ce qui va suivre.
             Vue::Direct if self.role.is_empty() => Some(if self.catalogue.complet {
                 (
                     "Aucun chantier ne tourne".to_string(),
                     // La suite promise doit exister : sans aucun projet, la
-                    // barre n'a que le direct (juge-design.md, m4).
+                    // barre n'a que le direct.
                     if self.onglets.len() > 1 {
                         "Le prochain qui démarre s’affichera ici de lui-même. ← et → parcourent les projets et leurs chantiers passés."
                             .to_string()
@@ -2848,7 +2847,7 @@ impl Vigie {
     /// chemin : c'est la seule facon qu'une image jugee soit celle qu'on voit.
     fn dessiner_dans(&mut self, vue: &wgpu::TextureView) {
         // Sur un peripherique perdu, le premier tampon cree naitrait invalide
-        // et `create_buffer_init` paniquerait (objection 22).
+        // et `create_buffer_init` paniquerait.
         if perdu() {
             return;
         }
@@ -2950,7 +2949,7 @@ impl Vigie {
         }
 
         // La pastille ne dit qu'une chose : quelque chose travaille ici, en
-        // ce moment (cadre, C7). Devant un chantier fini, interrompu, ou un
+        // ce moment. Devant un chantier fini, interrompu, ou un
         // etat vide, elle n'est pas la. Elle respire, periode 2,6 s.
         let haut_entete = vues::ONGLETS_H * e;
         // Le titre sur sa colonne ; la pastille pend a sa gauche, dans la
@@ -2967,7 +2966,7 @@ impl Vigie {
                 couleur: {
                     // Le creux du souffle tient 3:1 sur le fond dans les deux
                     // themes : a 0,30, le clair tombait a 1,39:1 et restait
-                    // sous 3:1 pendant 1,45 s sur 2,6 (juge-design.md, M2).
+                    // sous 3:1 pendant 1,45 s sur 2,6.
                     let bas = palette::plancher_souffle();
                     palette::lineaire(palette::encre1(), bas + (1.0 - bas) * souffle)
                 },
@@ -4059,8 +4058,8 @@ impl ApplicationHandler for Demarrage {
         // Une capture ne juge que ce que ses drapeaux posent. Sa fenetre est
         // visible le temps d'attendre, et une touche tapee ailleurs (Retour
         // arriere), un clic ou la souris qui passe y agissaient sans laisser de
-        // trace : la page au lieu du fil, 2 fois sur 14 (juge-technique.md,
-        // §4). Les clics et touches rejoues ne passent pas par ici.
+        // trace : la page au lieu du fil, 2 fois sur 14. Les clics et
+        // touches rejoues ne passent pas par ici.
         if self.capture.is_some()
             && matches!(
                 ev,

@@ -10,7 +10,7 @@
 //!
 //! 1. Le dossier de lancement ne dit PAS le projet. Une session ouverte dans le
 //!    dossier personnel range sous lui des chantiers qui travaillent dans
-//!    relais ou dans rudin-recompose.
+//!    d'autres depots.
 //! 2. Le vrai lieu est le champ « cwd » des transcriptions d'agent, ecrit tantot
 //!    a la Windows, tantot a la Git Bash (/c/Users/...). Il varie d'un agent a
 //!    l'autre dans un meme chantier : souvent, la plupart restent au dossier
@@ -148,7 +148,7 @@ impl Chantier {
     }
 
     /// Quelque chose y travaille en ce moment : en cours, et pas muet. C'est
-    /// ce que dit la pastille, et elle ne dit que cela (cadre, C7).
+    /// ce que dit la pastille, et elle ne dit que cela.
     pub fn vivant(&self, maintenant: SystemTime) -> bool {
         self.etat == Etat::EnCours && self.muet(maintenant).is_none()
     }
@@ -604,7 +604,7 @@ impl Memoire {
     }
 }
 
-/// Le nom tire du fichier du script, « relais-briques-wf_5f0590e4-61c.js » :
+/// Le nom tire du fichier du script, « <nom>-wf_<id>.js » :
 /// le recours quand l'en-tete ne se lit pas.
 fn nom_de_fichier(id: &str, scripts: &HashMap<String, PathBuf>) -> String {
     scripts
@@ -794,7 +794,7 @@ mod essais {
         (moment.to_string(), lieu.to_string())
     }
 
-    /// La forme relevee sur un chantier de rudin-recompose : la plupart des
+    /// La forme relevee sur un chantier reel : la plupart des
     /// agents au dossier personnel, deux dans le depot. Le depot l'emporte.
     #[test]
     fn le_depot_l_emporte_sur_le_dossier_personnel() {
@@ -883,7 +883,7 @@ mod essais {
         assert!(c(Etat::Fini).muet(t + 25 * minute).is_none());
     }
 
-    /// L'en-tete exact du script relais-studio-design, releve le 2026-10-03,
+    /// L'en-tete exact d'un vrai script, releve le 2026-10-03,
     /// et un echappement que les scripts de Stone contiennent souvent.
     #[test]
     fn l_en_tete_d_un_script() {

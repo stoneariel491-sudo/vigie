@@ -80,3 +80,10 @@ Unit tests live next to the code (`cargo test`).
   repositories with the same name share a tab.
 - Some interactions were only checked through `--capture` replays, not with a real mouse
   (listed one by one in the last section of `LISEZ-MOI.md`).
+
+## How it was made
+
+I built Vigie by directing AI coding agents (Claude Code): I set the goals, made the design
+decisions and defined how each change would be checked (captures, measurements on pixels, tests
+that must be shown able to fail), and reviewed the results; the agents wrote most of the code
+and the documentation.

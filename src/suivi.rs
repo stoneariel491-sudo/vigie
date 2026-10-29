@@ -151,7 +151,7 @@ pub fn legende_courte(img: &Image) -> String {
 
 /// La parole sans le balisage qui s'y lirait en clair : les dieses d'un
 /// titre, les accents graves d'un chemin, les doubles asterisques d'une
-/// emphase (cadre du tour 00, constat 5). Une asterisque seule reste : elle
+/// emphase. Une asterisque seule reste : elle
 /// est un produit dans `a * b` aussi souvent qu'une emphase.
 pub fn sans_balisage(t: &str) -> String {
     t.lines()
@@ -1229,7 +1229,7 @@ pub fn lancer(envoi: Sender<Nouvelle>, choix: Receiver<(u64, Choix)>, premier: C
 
 #[cfg(test)]
 mod essais_balisage {
-    /// Les deux formes relevees par le cadre, et un texte sans balisage, rendu
+    /// Les deux formes relevees dans de vrais fils, et un texte sans balisage, rendu
     /// tel quel.
     #[test]
     fn la_parole_perd_son_balisage() {

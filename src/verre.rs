@@ -2,7 +2,7 @@
 //! ouverte, et les plaques de verre ou se posent son titre et ses commandes.
 //!
 //! La matiere est celle de veilleuse, arbitree par l'auteur
-//! (`veilleuse/DECISION.md`, « Pour l'integrateur ») : flou de 18 px en
+//! (`DECISION.md` du depot veilleuse, « Pour l'integrateur ») : flou de 18 px en
 //! lineaire, vibrance 1,35, teinte noire posee sur les octets encodes, verre
 //! N-BK7 d'indice 1,5168, conge et epaisseur de 12 px pour une hauteur de 148,
 //! reflexion de Fresnel exacte moyennee sur huit prises, lampe d'ecran au
@@ -25,7 +25,7 @@ pub const TEINTE_FOND: f32 = 0.80;
 pub const TEINTE_PLAQUE: f32 = 0.62;
 /// Au theme clair, la page floutee est claire, et les memes teintes la
 /// laissaient grise : sous les plaques, l'encre de leurs textes tombait a
-/// 2,60:1 (passage B du tour 00, mesure sur la capture). Le verre reste sombre
+/// 2,60:1 (mesure sur la capture). Le verre reste sombre
 /// dans les deux themes, comme Coup d'oeil : la teinte monte pour que les
 /// plaques retrouvent le fond qu'elles ont sur la page sombre.
 pub const TEINTE_FOND_CLAIR: f32 = 0.95;
