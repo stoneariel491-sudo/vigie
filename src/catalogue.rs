@@ -203,6 +203,12 @@ fn accueil() -> String {
 /// (/c/Users/...) et la Windows (C:\Users\...) se trouvent dans le MEME
 /// fichier : sans cela, un meme depot ferait deux projets.
 pub fn normaliser(cwd: &str) -> String {
+    // Hors de Windows, un chemin est deja ce qu'il est : seule la barre finale s'ote.
+    if !cfg!(windows) {
+        let c = cwd.trim();
+        let sans = c.trim_end_matches('/');
+        return if sans.is_empty() && c.starts_with('/') { "/".to_string() } else { sans.to_string() };
+    }
     let mut c = cwd.trim().replace('/', "\\");
     let b = c.as_bytes();
     if b.len() >= 2 && b[0] == b'\\' && b[1].is_ascii_alphabetic() && (b.len() == 2 || b[2] == b'\\') {
@@ -218,8 +224,13 @@ pub fn normaliser(cwd: &str) -> String {
     c
 }
 
+/// La barre qui separe les composants d'un chemin sur ce systeme.
+pub(crate) const SEP: char = if cfg!(windows) { '\\' } else { '/' };
+
+/// Deux chemins sont egaux : sans egard a la casse sous Windows et macOS, dont
+/// les disques l'ignorent, avec sous Linux.
 fn egaux(a: &str, b: &str) -> bool {
-    a.eq_ignore_ascii_case(b)
+    if cfg!(target_os = "linux") { a == b } else { a.eq_ignore_ascii_case(b) }
 }
 
 fn sous(chemin: &str, parent: &str) -> bool {
@@ -227,7 +238,7 @@ fn sous(chemin: &str, parent: &str) -> bool {
         || (chemin.len() > parent.len()
             && chemin.is_char_boundary(parent.len())
             && egaux(&chemin[..parent.len()], parent)
-            && chemin.as_bytes()[parent.len()] == b'\\')
+            && chemin.as_bytes()[parent.len()] == SEP as u8)
 }
 
 /// Un lieu de travail, ou un non-lieu. Le dossier personnel, les fichiers
@@ -238,9 +249,10 @@ pub fn est_un_lieu(chemin: &str, accueil: &str) -> bool {
     if accueil.is_empty() {
         return true;
     }
-    !(egaux(chemin, accueil)
-        || sous(chemin, &format!("{accueil}\\AppData"))
-        || sous(chemin, &format!("{accueil}\\.claude")))
+    // Ce que les outils gardent chez eux (leurs transcriptions, leurs brouillons)
+    // n'est pas un lieu de travail.
+    const A_PART: [&str; 4] = ["AppData", ".claude", ".codex", ".gemini"];
+    !(egaux(chemin, accueil) || A_PART.iter().any(|d| sous(chemin, &format!("{accueil}{SEP}{d}"))))
 }
 
 /// Le nom qu'on lit dans un onglet : le dernier composant du chemin, sauf pour
@@ -249,11 +261,11 @@ pub fn nom_lisible(racine: &str, accueil: &str) -> String {
     if accueil.is_empty() || egaux(racine, accueil) {
         return DOSSIER_PERSONNEL.to_string();
     }
-    if egaux(racine, &format!("{accueil}\\Desktop")) {
+    if egaux(racine, &format!("{accueil}{SEP}Desktop")) {
         return "Bureau".to_string();
     }
     racine
-        .rsplit('\\')
+        .rsplit(SEP)
         .find(|s| !s.is_empty())
         .unwrap_or(racine)
         .to_string()
@@ -757,6 +769,7 @@ mod essais {
 
     const ACCUEIL: &str = r"C:\Users\alex";
 
+    #[cfg(windows)]
     #[test]
     fn les_deux_ecritures_d_un_chemin_se_confondent() {
         let attendu = r"C:\Users\alex\dev\active\atelier-e";
@@ -767,6 +780,7 @@ mod essais {
         assert_eq!(normaliser(r"C:\"), r"C:\");
     }
 
+    #[cfg(windows)]
     #[test]
     fn les_non_lieux_ne_votent_pas() {
         assert!(!est_un_lieu(ACCUEIL, ACCUEIL));
@@ -779,11 +793,29 @@ mod essais {
         assert!(est_un_lieu(r"C:\Users\alex\.claudette", ACCUEIL));
     }
 
+    #[cfg(windows)]
     #[test]
     fn les_noms_lisibles() {
         assert_eq!(nom_lisible(ACCUEIL, ACCUEIL), DOSSIER_PERSONNEL);
         assert_eq!(nom_lisible(r"C:\Users\alex\Desktop", ACCUEIL), "Bureau");
         assert_eq!(nom_lisible(r"C:\Users\alex\dev\active\atelier-e", ACCUEIL), "atelier-e");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn les_chemins_unix_se_comptent_comme_tels() {
+        assert_eq!(normaliser("/home/alex/dev/atelier/"), "/home/alex/dev/atelier");
+        assert_eq!(normaliser("/"), "/");
+        let accueil = "/home/alex";
+        assert!(!est_un_lieu(accueil, accueil));
+        assert!(!est_un_lieu("/home/alex/.claude/projects", accueil));
+        assert!(!est_un_lieu("/home/alex/.codex/sessions", accueil));
+        assert!(est_un_lieu("/home/alex/dev/atelier", accueil));
+        // Un dossier dont le nom COMMENCE comme un non-lieu n'en est pas un.
+        assert!(est_un_lieu("/home/alex/.claudette", accueil));
+        assert_eq!(nom_lisible(accueil, accueil), DOSSIER_PERSONNEL);
+        assert_eq!(nom_lisible("/home/alex/Desktop", accueil), "Bureau");
+        assert_eq!(nom_lisible("/home/alex/dev/atelier", accueil), "atelier");
     }
 
     fn sans_depot(c: &str) -> String {
@@ -904,10 +936,8 @@ mod essais {
     #[test]
     fn le_nom_tire_du_fichier() {
         let mut s = HashMap::new();
-        s.insert(
-            "wf_5f0590e4-61c".to_string(),
-            PathBuf::from(r"C:\x\workflows\scripts\atelier-e-briques-wf_5f0590e4-61c.js"),
-        );
+        let dossier: PathBuf = ["x", "workflows", "scripts"].iter().collect();
+        s.insert("wf_5f0590e4-61c".to_string(), dossier.join("atelier-e-briques-wf_5f0590e4-61c.js"));
         assert_eq!(nom_de_fichier("wf_5f0590e4-61c", &s), "atelier-e-briques");
         assert_eq!(nom_de_fichier("wf_absent", &s), "");
     }

@@ -128,6 +128,9 @@ pub fn dossier_de(commande: &str, cwd: &str) -> String {
 
 /// Un nom, ramene a un chemin absolu depuis `base`.
 pub fn resoudre(nom: &str, base: &str) -> PathBuf {
+    if !cfg!(windows) {
+        return resoudre_unix(nom, base);
+    }
     let nom = if let Some(r) = nom.strip_prefix("~/").or_else(|| nom.strip_prefix("~\\")) {
         let maison = std::env::var("USERPROFILE").unwrap_or_default();
         format!("{maison}\\{r}")
@@ -142,6 +145,19 @@ pub fn resoudre(nom: &str, base: &str) -> PathBuf {
     } else {
         Path::new(&normaliser(base)).join(n.trim_start_matches(".\\"))
     }
+}
+
+/// `resoudre` hors de Windows : un chemin absolu commence par « / », « ~/ » est
+/// le dossier personnel, le reste part de `base`.
+fn resoudre_unix(nom: &str, base: &str) -> PathBuf {
+    if let Some(r) = nom.strip_prefix("~/") {
+        let maison = std::env::var("HOME").unwrap_or_default();
+        return Path::new(&maison).join(r);
+    }
+    if nom.starts_with('/') {
+        return PathBuf::from(nom);
+    }
+    Path::new(&normaliser(base)).join(nom.trim_start_matches("./"))
 }
 
 /// Le fichier a-t-il ete produit par ce geste ? Deux cas, et seulement deux.
@@ -449,6 +465,19 @@ mod essais {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn le_dossier_d_une_commande_et_un_nom_se_resolvent_sous_unix() {
+        assert_eq!(dossier_de("cd /home/a/essais && ls", "/x"), "/home/a/essais");
+        assert_eq!(dossier_de("cd \"/home/a b/e\" && ls", "/x"), "/home/a b/e");
+        assert_eq!(dossier_de("cd media; ls", "/x"), "/x/media");
+        assert_eq!(dossier_de("ls -la", "/home/a/"), "/home/a");
+        assert_eq!(resoudre("planche.png", "/x/e"), PathBuf::from("/x/e/planche.png"));
+        assert_eq!(resoudre("./m/a.mp4", "/x"), PathBuf::from("/x/m/a.mp4"));
+        assert_eq!(resoudre("/y/b.png", "/x"), PathBuf::from("/y/b.png"));
+    }
+
+    #[cfg(windows)]
     #[test]
     fn le_dossier_d_une_commande() {
         assert_eq!(dossier_de("cd /c/Users/a/essais && ls", "C:\\x"), "C:\\Users\\a\\essais");
@@ -457,6 +486,7 @@ mod essais {
         assert_eq!(dossier_de("ls -la", "/c/Users/a"), "C:\\Users\\a");
     }
 
+    #[cfg(windows)]
     #[test]
     fn un_nom_se_resout() {
         assert_eq!(resoudre("planche.png", "C:\\x\\e"), PathBuf::from("C:\\x\\e\\planche.png"));
