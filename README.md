@@ -50,6 +50,7 @@ Invented demo data (a fictional project called "orbite"), reproducible with
   (`ureq` + rustls, no cookies, no scripts). Private and local addresses are refused *at DNS
   resolution time*, through a custom resolver, so a name that changes its answer between check
   and use (DNS rebinding) does not get through.
+- **Works without workflows.** Ordinary Claude Code sessions (`~/.claude/projects/<project>/<id>.jsonl`) show up as runs too, so you do not need to use workflows to see anything. A running workflow still takes the Direct view over an ordinary session.
 - **Reads more than one tool.** Besides Claude Code, Vigie follows [Codex CLI](https://github.com/openai/codex) (`~/.codex/sessions`) and Gemini CLI (`~/.gemini/tmp/*/chats`). Each tool has a small converter (`src/import/`) that rewrites its transcript in the format the rest of the app already follows, so a session shows up like any other run. These formats are not stable or officially documented: the converters follow their public descriptions and are tested on sample transcripts, not on every version of the tools. A line they do not understand is skipped, never fatal. `VIGIE_SANS_IMPORT=1` turns the import off.
 - **Zoomable images, audio waveforms and links.** Images zoom like on a Mac; sounds play with
   their waveform; a cited page opens in an isolated engine with the quoted passage highlighted.

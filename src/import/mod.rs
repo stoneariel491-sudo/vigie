@@ -14,6 +14,7 @@
 //! pas sur toutes leurs versions. Une ligne qu'un convertisseur ne comprend
 //! pas est ignoree, jamais fatale.
 
+pub mod claude;
 pub mod codex;
 pub mod gemini;
 
@@ -44,7 +45,8 @@ pub struct Format {
     pub nouveau: fn(&Path) -> Box<dyn Convertisseur>,
 }
 
-pub const FORMATS: [Format; 2] = [
+pub const FORMATS: [Format; 3] = [
+    Format { nom: "claude", trouver: claude::trouver, nouveau: claude::nouveau },
     Format { nom: "codex", trouver: codex::trouver, nouveau: codex::nouveau },
     Format { nom: "gemini", trouver: gemini::trouver, nouveau: gemini::nouveau },
 ];
@@ -180,7 +182,14 @@ fn cible(racine: &Path, format: &str, source: &Path, c: &dyn Convertisseur) -> P
 fn nommer(format: &str, premiere: &str) -> String {
     let mots: Vec<&str> = premiere.split_whitespace().take(6).collect();
     let n = nom_sur(&mots.join("-").to_lowercase());
-    if mots.is_empty() { format.to_string() } else { format!("{format}-{}", n.trim_matches('-')) }
+    if mots.is_empty() {
+        format.to_string()
+    } else if format == "claude" {
+        // Les sessions de Claude Code sont le cas ordinaire : pas de prefixe.
+        n.trim_matches('-').to_string()
+    } else {
+        format!("{format}-{}", n.trim_matches('-'))
+    }
 }
 
 fn ecrire_fiches(cible: &Path, format: &str, premiere: &str) {

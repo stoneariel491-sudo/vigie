@@ -339,7 +339,8 @@ fn dernier_chantier() -> Option<PathBuf> {
             }
         }
     }
-    let mut v: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
+    // (date, chemin, session ordinaire de Claude Code remise au format par l'import)
+    let mut v: Vec<(std::time::SystemTime, PathBuf, bool)> = Vec::new();
     for liste_projets in racines().iter().filter_map(|r| std::fs::read_dir(r).ok()) {
         for projet in liste_projets.filter_map(|e| e.ok()) {
             let Ok(sessions) = std::fs::read_dir(projet.path()) else {
@@ -351,18 +352,30 @@ fn dernier_chantier() -> Option<PathBuf> {
                     continue;
                 };
                 for c in chantiers.filter_map(|e| e.ok()) {
-                    if !c.file_name().to_string_lossy().starts_with("wf_") {
+                    let nom = c.file_name().to_string_lossy().to_string();
+                    if !nom.starts_with("wf_") {
                         continue;
                     }
                     if let Some(t) = c.metadata().ok().and_then(|m| m.modified().ok()) {
-                        v.push((t, c.path()));
+                        v.push((t, c.path(), nom.starts_with("wf_claude-")));
                     }
                 }
             }
         }
     }
-    v.sort_by_key(|(t, _)| *t);
-    let trouve = v.pop().map(|(_, p)| p);
+    v.sort_by_key(|(t, _, _)| *t);
+    // Le direct suit ce qui a bouge en dernier. Mais une session ordinaire ne
+    // detrone pas un workflow qui travaille encore : qui lance des workflows les
+    // regarde, et l'hote d'une session n'en a pas besoin pour la voir (elle est
+    // dans sa liste de projets).
+    let maintenant = crate::app::maintenant();
+    let recent = |t: &std::time::SystemTime| maintenant.duration_since(*t).map(|d| d < Duration::from_secs(3600)).unwrap_or(true);
+    let trouve = v
+        .iter()
+        .rev()
+        .find(|(t, _, ordinaire)| !*ordinaire && recent(t))
+        .or_else(|| v.last())
+        .map(|(_, p, _)| p.clone());
     if let Ok(mut g) = CACHE.lock() {
         *g = Some((Instant::now(), trouve.clone()));
     }
