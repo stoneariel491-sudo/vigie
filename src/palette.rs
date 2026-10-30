@@ -1,7 +1,7 @@
 //! Les couleurs, et le sens de chacune, dans les deux themes.
 //!
-//! Les valeurs sont celles du systeme du tour 00 : trois encres et pas
-//! quatre, chacune a son seuil sur
+//! Les valeurs sont celles du systeme du tour 00 (`design/tours/tour-00/
+//! outils/palette.json`) : trois encres et pas quatre, chacune a son seuil sur
 //! son fond, mesure sur les pixels. Aucune teinte dans l'interface : les seules
 //! couleurs de la fenetre sont celles des images des agents, et l'alerte, qui
 //! n'est jamais seule (un mot dit l'etat).
@@ -62,7 +62,7 @@ pub fn clair() -> bool {
 
 /// Les encres posees sur le verre de la visionneuse. Le verre est sombre dans
 /// les deux themes (une teinte noire de 0,80 sur la vue floutee, comme le
-/// givre de veilleuse) : ses textes gardent les encres du theme sombre.
+/// givre de vitrine) : ses textes gardent les encres du theme sombre.
 pub const PAROLE: Color = rgb(0xF2EFE9);
 pub const PENSEE: Color = rgb(0xA3A09B);
 
@@ -176,7 +176,7 @@ pub fn encre3() -> Color {
     }
     // Le clair s'ecarte du systeme (#6B6863) : a l'echelle 1, le lissage
     // pali le coeur des glyphes de 13 points jusqu'a 4,12:1 sur ses pixels
-    // (mesure sur les pixels). #63605B en garde 5,70 ecrits.
+    // (partisan-console.md, mesures). #63605B en garde 5,70 ecrits.
     choisir(0x83807B, 0x63605B)
 }
 
@@ -226,7 +226,7 @@ pub const SOUFFLE_CONTRASTE: f32 = 3.3;
 /// en lumiere lineaire (la surface est sRGB), donc sa luminance est
 /// a·Le + (1 − a)·Lf, et l'on resout pour SOUFFLE_CONTRASTE. Le sombre garde
 /// son ancien creux, 0,30, qui tient deja 5,85:1 ; le clair monte a 0,75 : a
-/// 0,30 il tombait a 1,39:1.
+/// 0,30 il tombait a 1,39:1 (juge-design.md, M2).
 pub fn plancher_souffle() -> f32 {
     let (le, lf) = (luminance(encre1()), luminance(fond_octets()));
     let voulu = if le > lf {

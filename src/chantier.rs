@@ -103,7 +103,7 @@ fn premiere_ligne(t: &str) -> String {
 /// La phrase d'un bilan. Un bilan est un texte, ou un objet quand le
 /// chantier demande une reponse structuree : on y prend alors le champ qui
 /// conclut, sinon le premier texte, sinon le compte d'une liste (« 6
-/// figures »), vus le 2026-10-27 sur un chantier de figures.
+/// figures »), vus le 2026-10-27 sur troncons-tome3-figures.
 fn bilan(v: &serde_json::Value) -> String {
     const CONCLUSIONS: [&str; 7] = ["verdict", "resume", "résumé", "summary", "bilan", "conclusion", "message"];
     match v {
@@ -191,8 +191,8 @@ fn relire(dossier: &Path, lus: &mut HashMap<String, Lu>, apres: &mut dyn FnMut(&
     let mut change = false;
     // Dans l'ordre ou chacun a commence, celui de la page : lus dans l'ordre
     // du dossier, les agents s'inseraient au-dessus de ceux deja montres, et
-    // la ligne qu'on allait cliquer descendait sous la main
-    // (`chercheur-forme` ouvert au lieu de
+    // la ligne qu'on allait cliquer descendait sous la main (epreuve.md,
+    // tache 1 : `chercheur-forme` ouvert au lieu de
     // `chercheur-direction-artistique`, 3 fois sur 4). Seul un agent neuf est
     // ouvert pour cela, une fois.
     let mut agents: Vec<(Option<SystemTime>, String, PathBuf)> = agents_du(dossier)
@@ -326,7 +326,7 @@ fn attribuer(mut v: Vec<Vignette>, rang: &HashMap<&str, usize>) -> Vec<Vignette>
     // Une image recopiee sous un autre nom (un `cp`) est la meme image : le
     // fil la dit « la même que » et ne la compte pas ; la planche la montrait
     // et le compte de l'agent l'ajoutait, 13 images sur la page pour 12 dans
-    // le fil. La premiere venue reste, comme dans le fil.
+    // le fil (juge-design.md, M1). La premiere venue reste, comme dans le fil.
     let mut vues = std::collections::HashSet::new();
     v.retain(|x| vues.insert(x.image.empreinte()));
     v

@@ -101,6 +101,21 @@ pub fn cible(plan: &Plan, x: f32, y: f32) -> Cible {
     Cible::Rien
 }
 
+/// La hauteur minimale d'une cible de clic, en points (WCAG 2.5.8, niveau AA).
+/// Un lien dans une phrase en est dispense, sa taille tenant a l'interligne du
+/// texte qui l'entoure ; une ligne qui est elle-meme le lien ne l'est pas.
+pub const CIBLE_MIN: f32 = 24.0;
+
+/// La hauteur d'une ligne de geste : celle du fil, ou `CIBLE_MIN` si la ligne
+/// est un lien (la ligne entiere se vise, sans recouvrir sa voisine).
+pub fn hauteur_de_ligne(base: f32, est_un_lien: bool) -> f32 {
+    if est_un_lien {
+        base.max(CIBLE_MIN)
+    } else {
+        base
+    }
+}
+
 /// Un lien deborde de sa boite de trois points au plus : un clic plus loin ne
 /// l'ouvre pas.
 pub const LIEN_DEBORD: f32 = 3.0;
@@ -134,6 +149,17 @@ pub fn garder_visible(debut: f32, fin: f32, vue: f32, actuel: f32, marge: f32, m
 #[cfg(test)]
 mod essais {
     use super::*;
+
+    /// Objection C12 de la correction : les lignes de lien faisaient 20 pt.
+    #[test]
+    fn une_ligne_de_lien_fait_vingt_quatre_points_et_les_autres_gardent_la_leur() {
+        assert_eq!(hauteur_de_ligne(20.0, true), 24.0);
+        assert_eq!(hauteur_de_ligne(20.0, false), 20.0);
+        assert_eq!(hauteur_de_ligne(30.0, true), 30.0);
+        for e in [1.0f32, 1.25, 1.5, 2.0] {
+            assert!(hauteur_de_ligne(20.0, true) * e >= 24.0 * e);
+        }
+    }
 
     fn b(x: f32, y: f32, l: f32, h: f32) -> Boite {
         Boite { x, y, l, h }

@@ -7,7 +7,8 @@
 #   2. ferme la vigie ouverte, s'il y en a une, et copie l'executable dans
 #      %LOCALAPPDATA%\Programs\Vigie, l'endroit des applications installees par
 #      utilisateur sous Windows ;
-#   3. pose un raccourci dans le menu Demarrer, et refait celui du Bureau ;
+#   3. copie l'icone a cote de l'executable (Vigie.ico) et pose un raccourci
+#      dans le menu Demarrer, et refait celui du Bureau ;
 #   4. l'inscrit dans « Applications installees », avec son icone, sa version et
 #      sa desinstallation.
 #
@@ -49,12 +50,22 @@ if (Test-Path $exe) {
 Copy-Item $source $exe
 Copy-Item (Join-Path $PSScriptRoot 'desinstaller.ps1') (Join-Path $cible 'desinstaller.ps1') -Force
 
+# L'icone, dans un fichier a elle. Le 2026-10-29, apres le changement d'icone,
+# le menu Demarrer montrait la nouvelle et le bouton de la barre des taches
+# l'ancienne : Windows garde, pour un raccourci, l'icone qu'il a vue sous le
+# couple (fichier, numero) donne, et « Vigie.exe,0 » etait deja dans son cache.
+# Un fichier au nom jamais vu n'a pas de cache : le raccourci, et avec lui le
+# bouton, prennent l'icone du fichier. Le numero d'une icone qui devrait un
+# jour changer encore se change avec le nom du fichier (Vigie.ico -> Vigie2.ico).
+$icone = Join-Path $cible 'Vigie.ico'
+Copy-Item (Join-Path $depot 'assets/vigie.ico') $icone -Force
+
 $coquille = New-Object -ComObject WScript.Shell
 foreach ($lien in @($menu, $bureau)) {
     $r = $coquille.CreateShortcut($lien)
     $r.TargetPath = $exe
     $r.WorkingDirectory = $cible
-    $r.IconLocation = "$exe,0"
+    $r.IconLocation = "$icone,0"
     $r.Description = 'Regarder penser les agents, en direct'
     $r.Save()
 }
@@ -67,7 +78,7 @@ $desinstaller = "powershell.exe -NoProfile -File `"$cible\desinstaller.ps1`""
     DisplayName     = 'Vigie'
     DisplayVersion  = $version
     Publisher       = 'Stone'
-    DisplayIcon     = "$exe,0"
+    DisplayIcon     = "$icone,0"
     InstallLocation = $cible
     UninstallString = $desinstaller
     QuietUninstallString = $desinstaller

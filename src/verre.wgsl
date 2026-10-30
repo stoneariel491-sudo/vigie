@@ -1,6 +1,6 @@
 // Le verre de la visionneuse : le fond flou et les plaques.
 //
-// La recette est celle du verre ARBITREE de veilleuse (son DECISION.md,
+// La recette est celle du verre ARBITREE de vitrine (vitrine/DECISION.md,
 // « Pour l'integrateur », et src/galet.wgsl, `couleur_verre`) : une couche
 // floutee en lineaire, sa vibrance, une teinte noire posee sur les octets
 // ENCODES, et au biseau la refraction de Snell sur la couche nette, la
@@ -69,7 +69,7 @@ fn depuis_srgb(c: vec3<f32>) -> vec3<f32> {
 //
 // Premiere passe : horizontale, elle lit la scene un pixel sur `fond.w` et
 // ecrit la demi-couche. Seconde passe : verticale, sur la demi-couche. Le flou
-// a demi-resolution est celui du givre de veilleuse (RECETTES.md de veilleuse :
+// a demi-resolution est celui du givre de vitrine (RECETTES.md de vitrine :
 // « divise son cout par huit sans rien changer de visible »).
 @fragment
 fn flou(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
@@ -181,7 +181,7 @@ fn nette_en(p: vec2<f32>) -> vec3<f32> {
 
 // Ce que montre le fond en un point : la scene nette fondue dans son verre.
 // C'est ce qu'une plaque reflete. Lire la scene nette, comme l'ilot de
-// veilleuse lit le bureau, faisait apparaitre sous la plaque du titre une bande
+// vitrine lit le bureau, faisait apparaitre sous la plaque du titre une bande
 // de texte presque net, alors qu'autour on ne voit que du flou (vu le
 // 2026-10-27 sur la premiere capture du verre).
 fn fond_en(p: vec2<f32>) -> vec3<f32> {
@@ -192,7 +192,7 @@ fn fond_en(p: vec2<f32>) -> vec3<f32> {
 // page sous la visionneuse, floutee, avec une teinte plus legere que celle du
 // fond : posee sur un fond deja assombri, elle se lit comme une lame plus
 // claire, et son chant comme une arete de lumiere. C'est l'autre ecart avec
-// l'ilot de veilleuse, qui se pose sur le bureau lui-meme.
+// l'ilot de vitrine, qui se pose sur le bureau lui-meme.
 @fragment
 fn plaque(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     let f = forme(pos.xy - u.plaque.xy, u.plaque.zw, u.forme.x, u.forme.y);

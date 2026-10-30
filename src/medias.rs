@@ -414,7 +414,7 @@ mod essais {
         let commande = "cd /c/x/essais && ffmpeg -y -loglevel error -i clair_1000.png -i sombre_1000.png \
                         -filter_complex hstack=inputs=2 planche_clair_sombre.png && ls -la planche_clair_sombre.png";
         assert_eq!(courts(commande), vec!["clair_1000.png", "sombre_1000.png", "planche_clair_sombre.png"]);
-        let sortie = "-rw-r--r-- 1 moi 197609 16982 Oct 27 09:52 clair_1000.png\nmedia/videos/secante/480p15/Secante.mp4";
+        let sortie = "-rw-r--r-- 1 alex 197609 16982 Oct 27 09:52 clair_1000.png\nmedia/videos/secante/480p15/Secante.mp4";
         assert_eq!(courts(sortie), vec!["clair_1000.png", "media/videos/secante/480p15/Secante.mp4"]);
         // V=chemin, un motif, une adresse, un nom suivi d'un point final.
         assert_eq!(courts("V=media/a.mp4; find . -name '*.mp4'"), vec!["media/a.mp4"]);
@@ -443,7 +443,7 @@ mod essais {
         std::fs::write(d.join("capture 1.png"), b"x").unwrap();
         std::fs::write(d.join("1.png"), b"x").unwrap();
         let base = d.to_string_lossy().to_string();
-        let g = &noms("-rw-r--r-- 1 moi 16982 Oct 27 09:52 capture 1.png")[0];
+        let g = &noms("-rw-r--r-- 1 alex 16982 Oct 27 09:52 capture 1.png")[0];
         let trouve = g.iter().map(|n| resoudre(n, &base)).find(|c| c.is_file());
         assert_eq!(trouve, Some(d.join("capture 1.png")));
         let _ = std::fs::remove_dir_all(&d);

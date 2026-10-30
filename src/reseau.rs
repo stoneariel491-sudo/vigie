@@ -13,6 +13,8 @@
 
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use ureq::config::Config;
@@ -25,6 +27,8 @@ use crate::passage::{adresse, classer, Classe};
 pub const OCTETS_MAX: usize = 2 * 1024 * 1024;
 /// Le temps total d'une lecture, resolution et lecture comprises.
 pub const DELAI: Duration = Duration::from_secs(10);
+/// La langue demandee : celle que lit un agent, et celle de la page ouverte ensuite.
+pub const LANGUE: &str = "en-US,en;q=0.9";
 /// Les redirections suivies, chacune re-jugee.
 const SAUTS_MAX: usize = 5;
 
@@ -101,6 +105,9 @@ fn privee_v4(a: Ipv4Addr) -> bool {
 #[derive(Debug)]
 struct ResolveurSur {
     local_permis: bool,
+    /// Levee quand la resolution n'a rendu que des adresses privees : la lecture
+    /// le dit « cet ordinateur », pas « pas de connexion ».
+    refus: Arc<AtomicBool>,
 }
 
 impl Resolver for ResolveurSur {
@@ -115,13 +122,14 @@ impl Resolver for ResolveurSur {
             sortie.push(*a);
         }
         if sortie.is_empty() {
+            self.refus.store(true, Ordering::SeqCst);
             return Err(ureq::Error::HostNotFound);
         }
         Ok(sortie)
     }
 }
 
-fn client(local_permis: bool) -> ureq::Agent {
+fn client(local_permis: bool) -> (ureq::Agent, Arc<AtomicBool>) {
     let config = Config::builder()
         // Les redirections sont suivies ici, une a une, pour que chacune soit
         // jugee et dite.
@@ -137,7 +145,9 @@ fn client(local_permis: bool) -> ureq::Agent {
         .accept("text/html,application/xhtml+xml,text/plain;q=0.8,*/*;q=0.1")
         .accept_encoding("identity")
         .build();
-    ureq::Agent::with_parts(config, ureq::unversioned::transport::DefaultConnector::default(), ResolveurSur { local_permis })
+    let refus = Arc::new(AtomicBool::new(false));
+    let agent = ureq::Agent::with_parts(config, ureq::unversioned::transport::DefaultConnector::default(), ResolveurSur { local_permis, refus: refus.clone() });
+    (agent, refus)
 }
 
 /// Lit une adresse. `local_ok` : Stone a accepte qu'on ouvre une adresse de sa
@@ -145,16 +155,22 @@ fn client(local_permis: bool) -> ureq::Agent {
 pub fn lire(url: &str, local_ok: bool) -> Issue {
     let mut courante = url.to_string();
     let hote_depart = adresse(url).hote_nu().trim_start_matches("www.").to_string();
+    // L'accord de Stone vaut pour l'hote (et le port) qu'il a vu, pas pour ce
+    // vers quoi le serveur le renvoie ensuite.
+    let hote_accepte = adresse(url).hote;
     let mut redirection: Option<String> = None;
     for _ in 0..=SAUTS_MAX {
+        let permis = local_ok && adresse(&courante).hote == hote_accepte;
         match classer(&courante) {
             Classe::Refuse(s) => return Issue::Refuse(s),
             Classe::Gabarit => return Issue::Refuse("gabarit".into()),
-            Classe::Local if !local_ok => return Issue::Local,
+            Classe::Local if !permis => return Issue::Local,
             _ => {}
         }
-        let rep = match client(local_ok).get(&courante).call() {
+        let (agent, refus) = client(permis);
+        let rep = match agent.get(&courante).header("Accept-Language", LANGUE).call() {
             Ok(r) => r,
+            Err(_) if refus.load(Ordering::SeqCst) => return Issue::Local,
             Err(e) => return issue_de_l_erreur(&e),
         };
         let code = rep.status().as_u16();
@@ -224,6 +240,8 @@ fn lire_reponse(rep: ureq::http::Response<ureq::Body>, url: String, redirection:
     if erreur && octets.is_empty() {
         return Issue::Delai;
     }
+    // Une lecture coupee par le delai ou par le serveur n'est pas la page entiere.
+    let tronquee = tronquee || erreur;
     let brut = if latin { octets.iter().map(|&o| o as char).collect::<String>() } else { String::from_utf8_lossy(&octets).into_owned() };
     let est_html = type_.contains("html") || type_.is_empty() || brut.trim_start().starts_with('<');
     let (titre, texte) = if est_html { texte_html(&brut) } else { (String::new(), brut.clone()) };
@@ -429,6 +447,54 @@ mod essais {
         }
     }
 
+    /// Le haut de la plage de l'operateur et les adresses locales uniques, que les
+    /// sabotages du juge technique laissaient intactes.
+    #[test]
+    fn les_bornes_des_plages_privees_sont_tenues() {
+        // Les bornes de la lecture, dites en chiffres et non par leur nom : un essai qui
+        // se mesure a la constante qu'il doit pinner ne voit pas qu'elle a change.
+        assert_eq!(DELAI, Duration::from_secs(10));
+        assert_eq!(OCTETS_MAX, 2 * 1024 * 1024);
+        for a in ["100.64.0.0", "100.127.255.255", "198.18.0.1", "198.19.255.255", "192.0.0.1", "fd00::1", "fdff::1", "fc00::1", "fe80::1", "febf::1"] {
+            assert!(est_privee(a.parse().unwrap()), "{a} devrait etre privee");
+        }
+        for a in ["100.128.0.0", "198.20.0.1", "198.17.255.255", "192.0.1.1", "fe00::1", "fec0::1", "2001:db8::1"] {
+            assert!(!est_privee(a.parse().unwrap()), "{a} devrait etre publique");
+        }
+    }
+
+    /// Le serveur renvoie toujours vers lui-meme : la vigie s'arrete a six
+    /// requetes (la premiere et cinq sauts), et le dit.
+    #[test]
+    fn une_boucle_de_redirections_s_arrete_au_nombre_de_sauts() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize};
+        let ecoute = TcpListener::bind("127.0.0.1:0").unwrap();
+        ecoute.set_nonblocking(true).unwrap();
+        let port = ecoute.local_addr().unwrap().port();
+        let compte = Arc::new(AtomicUsize::new(0));
+        let fin = Arc::new(AtomicBool::new(false));
+        let (c2, f2) = (compte.clone(), fin.clone());
+        let t = std::thread::spawn(move || {
+            while !f2.load(Ordering::SeqCst) {
+                let Ok((mut f, _)) = ecoute.accept() else {
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                };
+                f.set_nonblocking(false).ok();
+                f.set_read_timeout(Some(Duration::from_secs(3))).ok();
+                let mut tampon = [0u8; 4096];
+                let _ = f.read(&mut tampon);
+                c2.fetch_add(1, Ordering::SeqCst);
+                let _ = f.write_all(&http("302 Found", "Location: /encore
+", ""));
+            }
+        });
+        assert_eq!(lire(&format!("http://127.0.0.1:{port}/debut"), true), Issue::Statut(310));
+        fin.store(true, Ordering::SeqCst);
+        t.join().unwrap();
+        assert_eq!(compte.load(Ordering::SeqCst), 6, "la limite de sauts a change");
+    }
+
     #[test]
     fn un_lieu_relatif_se_resout_sur_la_page_qui_l_envoie() {
         assert_eq!(resoudre_lieu("https://a.org/x/y?q=1", "/z"), "https://a.org/z");
@@ -483,6 +549,7 @@ mod essais {
         assert!(r.starts_with("get /page http/1.1"), "{r}");
         assert!(!r.contains("cookie:") && !r.contains("authorization:"), "{r}");
         assert!(r.contains("user-agent: vigie"), "{r}");
+        assert!(r.contains("accept-encoding: identity"), "{r}");
     }
 
     /// La resolution seule juge : `localhost` n'est pas classe local ici quand
@@ -492,9 +559,15 @@ mod essais {
     fn un_nom_qui_resout_vers_une_adresse_privee_est_refuse_a_la_resolution() {
         let (port, _h) = serveur(vec![http("200 OK", "Content-Type: text/plain\r\n", "secret")]);
         let url = format!("http://localtest.me:{port}/x");
+        // Le temoin du temoin : en ligne, le nom resout, et le refus se dit exactement.
+        let en_ligne = std::net::ToSocketAddrs::to_socket_addrs(&("localtest.me", 80)).is_ok();
+        if en_ligne {
+            assert_eq!(lire(&url, false), Issue::Local);
+        }
         match lire(&url, false) {
             Issue::Page(p) => panic!("le contenu local a ete lu : {p:?}"),
-            Issue::HorsLigne | Issue::Delai | Issue::Local | Issue::Refuse(_) | Issue::Statut(_) | Issue::Absente => {}
+            // En ligne, le nom resout vers le local : refuse, et dit « cet ordinateur ».
+            Issue::Local | Issue::HorsLigne | Issue::Delai => {}
             x => panic!("{x:?}"),
         }
     }
@@ -558,20 +631,58 @@ mod essais {
 
     #[test]
     fn une_redirection_est_suivie_jugee_et_dite() {
-        // Vers un autre hote : suivie, et l'hote d'arrivee est dit.
-        let (p2, _h2) = serveur(vec![http("200 OK", "Content-Type: text/html\r\n", "<p>arrivee</p>")]);
-        let (p1, _h1) = serveur(vec![http("302 Found", &format!("Location: http://localhost:{p2}/fin\r\n"), "")]);
+        // Vers le meme hote, que Stone a accepte : suivie.
+        let ecoute = TcpListener::bind("127.0.0.1:0").unwrap();
+        let p1 = ecoute.local_addr().unwrap().port();
+        let h1 = std::thread::spawn(move || {
+            for rep in [http("302 Found", &format!("Location: http://127.0.0.1:{p1}/fin\r\n"), ""), http("200 OK", "Content-Type: text/html\r\n", "<p>arrivee</p>")] {
+                let Ok((mut f, _)) = ecoute.accept() else { break };
+                f.set_read_timeout(Some(Duration::from_secs(3))).ok();
+                let mut tampon = [0u8; 4096];
+                let _ = f.read(&mut tampon);
+                let _ = f.write_all(&rep);
+            }
+        });
         match lire(&format!("http://127.0.0.1:{p1}/debut"), true) {
             Issue::Page(p) => {
                 assert_eq!(p.texte, "arrivee");
-                assert_eq!(p.redirection.as_deref(), Some(&*format!("localhost:{p2}")));
+                assert_eq!(p.redirection, None);
                 assert!(p.url.ends_with("/fin"));
             }
             x => panic!("{x:?}"),
         }
+        h1.join().unwrap();
+        // Vers un autre hote de la machine que celui accepte : jugee, refusee, jamais contactee.
+        let (p2, h2) = serveur(vec![http("200 OK", "Content-Type: text/plain\r\n", "SECRET")]);
+        let (p0, _h0) = serveur(vec![http("302 Found", &format!("Location: http://localhost:{p2}/fin\r\n"), "")]);
+        assert_eq!(lire(&format!("http://127.0.0.1:{p0}/debut"), true), Issue::Local);
+        // Le port voisin, le meme hote : un autre service, donc refuse aussi.
+        let (p4, _h4) = serveur(vec![http("302 Found", &format!("Location: http://127.0.0.1:{p2}/fin\r\n"), "")]);
+        assert_eq!(lire(&format!("http://127.0.0.1:{p4}/debut"), true), Issue::Local);
+        // Le serveur du secret n'a rien recu : seule notre connexion a vide l'attente.
+        let _ = std::net::TcpStream::connect(("127.0.0.1", p2));
+        assert_eq!(h2.join().unwrap(), vec![String::new()], "le serveur voisin a recu une requete");
         // Vers un schema refuse : refusee, rien n'est lu.
         let (p3, _h3) = serveur(vec![http("302 Found", "Location: file:///C:/Windows/win.ini\r\n", "")]);
         assert_eq!(lire(&format!("http://127.0.0.1:{p3}/"), true), Issue::Refuse("file".into()));
+    }
+
+    #[test]
+    fn un_corps_coupe_en_route_se_dit_tronque() {
+        // Le serveur annonce 1000 octets, en envoie 20, et ferme : l'extrait n'est pas la page.
+        let ecoute = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ecoute.local_addr().unwrap().port();
+        let t = std::thread::spawn(move || {
+            let (mut f, _) = ecoute.accept().unwrap();
+            let mut tampon = [0u8; 4096];
+            let _ = f.read(&mut tampon);
+            let _ = f.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 1000\r\n\r\nvingt octets seulement");
+        });
+        match lire(&format!("http://127.0.0.1:{port}/"), true) {
+            Issue::Page(p) => assert!(p.tronquee, "un corps coupe passe pour entier : {p:?}"),
+            x => panic!("{x:?}"),
+        }
+        t.join().unwrap();
     }
 
     #[test]

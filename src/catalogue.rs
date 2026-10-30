@@ -10,7 +10,7 @@
 //!
 //! 1. Le dossier de lancement ne dit PAS le projet. Une session ouverte dans le
 //!    dossier personnel range sous lui des chantiers qui travaillent dans
-//!    d'autres depots.
+//!    atelier-e ou dans atelier-b.
 //! 2. Le vrai lieu est le champ « cwd » des transcriptions d'agent, ecrit tantot
 //!    a la Windows, tantot a la Git Bash (/c/Users/...). Il varie d'un agent a
 //!    l'autre dans un meme chantier : souvent, la plupart restent au dossier
@@ -82,7 +82,7 @@ const PREMIERE_LIGNE_MAX: u64 = 1 << 20;
 /// anciens.
 const PARTIEL: Duration = Duration::from_millis(500);
 
-/// Le nom lisible du dossier personnel. Son vrai nom, celui du compte, ne dit pas que
+/// Le nom lisible du dossier personnel. Son vrai nom, « alex », ne dit pas que
 /// c'est la qu'atterrit tout ce qui n'a pas de projet.
 pub const DOSSIER_PERSONNEL: &str = "dossier personnel";
 
@@ -148,7 +148,7 @@ impl Chantier {
     }
 
     /// Quelque chose y travaille en ce moment : en cours, et pas muet. C'est
-    /// ce que dit la pastille, et elle ne dit que cela.
+    /// ce que dit la pastille, et elle ne dit que cela (cadre, C7).
     pub fn vivant(&self, maintenant: SystemTime) -> bool {
         self.etat == Etat::EnCours && self.muet(maintenant).is_none()
     }
@@ -261,8 +261,8 @@ pub fn nom_lisible(racine: &str, accueil: &str) -> String {
 
 /// Le depot qui contient un chemin : le premier parent qui porte un « .git »
 /// (dossier, ou fichier pour un arbre de travail). Sans depot, le chemin
-/// lui-meme. Un agent qui travaille dans veilleuse\recherche\verre-taille
-/// travaille dans veilleuse.
+/// lui-meme. Un agent qui travaille dans vitrine\recherche\verre-taille
+/// travaille dans vitrine.
 fn racine_du_depot(chemin: &str) -> String {
     let mut p = Path::new(chemin);
     loop {
@@ -604,7 +604,7 @@ impl Memoire {
     }
 }
 
-/// Le nom tire du fichier du script, « <nom>-wf_<id>.js » :
+/// Le nom tire du fichier du script, « atelier-e-briques-wf_5f0590e4-61c.js » :
 /// le recours quand l'en-tete ne se lit pas.
 fn nom_de_fichier(id: &str, scripts: &HashMap<String, PathBuf>) -> String {
     scripts
@@ -755,14 +755,14 @@ pub fn lancer(envoi: Sender<Nouvelle>) {
 mod essais {
     use super::*;
 
-    const ACCUEIL: &str = r"C:\Users\moi";
+    const ACCUEIL: &str = r"C:\Users\alex";
 
     #[test]
     fn les_deux_ecritures_d_un_chemin_se_confondent() {
-        let attendu = r"C:\Users\moi\dev\active\relais";
-        assert_eq!(normaliser("/c/Users/moi/dev/active/relais"), attendu);
-        assert_eq!(normaliser(r"C:\Users\moi\dev\active\relais\"), attendu);
-        assert_eq!(normaliser("C:/Users/moi/dev/active/relais"), attendu);
+        let attendu = r"C:\Users\alex\dev\active\atelier-e";
+        assert_eq!(normaliser("/c/Users/alex/dev/active/atelier-e"), attendu);
+        assert_eq!(normaliser(r"C:\Users\alex\dev\active\atelier-e\"), attendu);
+        assert_eq!(normaliser("C:/Users/alex/dev/active/atelier-e"), attendu);
         assert_eq!(normaliser("/c"), r"C:\");
         assert_eq!(normaliser(r"C:\"), r"C:\");
     }
@@ -770,20 +770,20 @@ mod essais {
     #[test]
     fn les_non_lieux_ne_votent_pas() {
         assert!(!est_un_lieu(ACCUEIL, ACCUEIL));
-        assert!(!est_un_lieu(r"c:\users\moi", ACCUEIL));
-        assert!(!est_un_lieu(r"C:\Users\moi\AppData\Local\Temp\claude\x\scratchpad", ACCUEIL));
-        assert!(!est_un_lieu(r"C:\Users\moi\.claude\projects", ACCUEIL));
-        assert!(est_un_lieu(r"C:\Users\moi\dev\active\relais", ACCUEIL));
-        assert!(est_un_lieu(r"C:\Users\moi\Desktop", ACCUEIL));
+        assert!(!est_un_lieu(r"c:\users\alex", ACCUEIL));
+        assert!(!est_un_lieu(r"C:\Users\alex\AppData\Local\Temp\claude\x\scratchpad", ACCUEIL));
+        assert!(!est_un_lieu(r"C:\Users\alex\.claude\projects", ACCUEIL));
+        assert!(est_un_lieu(r"C:\Users\alex\dev\active\atelier-e", ACCUEIL));
+        assert!(est_un_lieu(r"C:\Users\alex\Desktop", ACCUEIL));
         // Un dossier dont le nom COMMENCE comme un non-lieu n'en est pas un.
-        assert!(est_un_lieu(r"C:\Users\moi\.claudette", ACCUEIL));
+        assert!(est_un_lieu(r"C:\Users\alex\.claudette", ACCUEIL));
     }
 
     #[test]
     fn les_noms_lisibles() {
         assert_eq!(nom_lisible(ACCUEIL, ACCUEIL), DOSSIER_PERSONNEL);
-        assert_eq!(nom_lisible(r"C:\Users\moi\Desktop", ACCUEIL), "Bureau");
-        assert_eq!(nom_lisible(r"C:\Users\moi\dev\active\relais", ACCUEIL), "relais");
+        assert_eq!(nom_lisible(r"C:\Users\alex\Desktop", ACCUEIL), "Bureau");
+        assert_eq!(nom_lisible(r"C:\Users\alex\dev\active\atelier-e", ACCUEIL), "atelier-e");
     }
 
     fn sans_depot(c: &str) -> String {
@@ -794,37 +794,37 @@ mod essais {
         (moment.to_string(), lieu.to_string())
     }
 
-    /// La forme relevee sur un chantier reel : la plupart des
+    /// La forme relevee sur un chantier de atelier-b : la plupart des
     /// agents au dossier personnel, deux dans le depot. Le depot l'emporte.
     #[test]
     fn le_depot_l_emporte_sur_le_dossier_personnel() {
         let agents = [
             a("2026-09-01T10:00:00Z", ACCUEIL),
             a("2026-09-01T10:01:00Z", ACCUEIL),
-            a("2026-09-01T10:02:00Z", r"C:\Users\moi\dev\active\rudin-recompose"),
+            a("2026-09-01T10:02:00Z", r"C:\Users\alex\dev\active\atelier-b"),
             a("2026-09-01T10:03:00Z", ACCUEIL),
-            a("2026-09-01T10:04:00Z", "/c/Users/moi/dev/active/rudin-recompose"),
+            a("2026-09-01T10:04:00Z", "/c/Users/alex/dev/active/atelier-b"),
         ];
         let agents: Vec<_> = agents.iter().map(|(m, l)| (m.clone(), normaliser(l))).collect();
-        assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), "rudin-recompose");
+        assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), "atelier-b");
     }
 
     #[test]
     fn a_egalite_l_agent_le_plus_ancien_decide() {
         let agents = [
-            a("2026-09-01T10:05:00Z", r"C:\Users\moi\dev\active\atelier"),
-            a("2026-09-01T10:00:00Z", r"C:\Users\moi\dev\active\projecteur"),
-            a("2026-09-01T10:09:00Z", r"C:\Users\moi\dev\active\atelier"),
-            a("2026-09-01T10:01:00Z", r"C:\Users\moi\dev\active\projecteur"),
+            a("2026-09-01T10:05:00Z", r"C:\Users\alex\dev\active\atelier-c"),
+            a("2026-09-01T10:00:00Z", r"C:\Users\alex\dev\active\atelier-a"),
+            a("2026-09-01T10:09:00Z", r"C:\Users\alex\dev\active\atelier-c"),
+            a("2026-09-01T10:01:00Z", r"C:\Users\alex\dev\active\atelier-a"),
         ];
-        assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), "projecteur");
+        assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), "atelier-a");
     }
 
     #[test]
     fn sans_aucun_lieu_le_dossier_personnel() {
         let agents = [
             a("1", ACCUEIL),
-            a("2", r"C:\Users\moi\AppData\Local\Temp\claude\s\scratchpad"),
+            a("2", r"C:\Users\alex\AppData\Local\Temp\claude\s\scratchpad"),
         ];
         assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), DOSSIER_PERSONNEL);
         assert_eq!(voter(&[], ACCUEIL, &mut sans_depot), DOSSIER_PERSONNEL);
@@ -833,14 +833,14 @@ mod essais {
     #[test]
     fn un_sous_dossier_se_ramene_a_son_depot() {
         let mut racine = |c: &str| {
-            if c.to_lowercase().starts_with(r"c:\users\moi\dev\active\veilleuse") {
-                r"C:\Users\moi\dev\active\veilleuse".to_string()
+            if c.to_lowercase().starts_with(r"c:\users\alex\dev\active\vitrine") {
+                r"C:\Users\alex\dev\active\vitrine".to_string()
             } else {
                 c.to_string()
             }
         };
-        let agents = [a("1", r"C:\Users\moi\dev\active\veilleuse\recherche\verre-taille")];
-        assert_eq!(voter(&agents, ACCUEIL, &mut racine), "veilleuse");
+        let agents = [a("1", r"C:\Users\alex\dev\active\vitrine\recherche\verre-taille")];
+        assert_eq!(voter(&agents, ACCUEIL, &mut racine), "vitrine");
     }
 
     #[test]
@@ -883,16 +883,16 @@ mod essais {
         assert!(c(Etat::Fini).muet(t + 25 * minute).is_none());
     }
 
-    /// L'en-tete exact d'un vrai script, releve le 2026-10-03,
+    /// L'en-tete exact du script atelier-e-studio-design, releve le 2026-10-03,
     /// et un echappement que les scripts de Stone contiennent souvent.
     #[test]
     fn l_en_tete_d_un_script() {
-        let texte = "export const meta = {\n  name: 'relais-studio-design',\n  description: 'Studio de design de relais : fondations, deux directions artistiques avec maquettes et motion, juge indépendant',\n  phases: [\n";
+        let texte = "export const meta = {\n  name: 'atelier-e-studio-design',\n  description: 'Studio de design de atelier-e : fondations, deux directions artistiques avec maquettes et motion, juge indépendant',\n  phases: [\n";
         let (n, d) = meta_du_script(texte);
-        assert_eq!(n.as_deref(), Some("relais-studio-design"));
+        assert_eq!(n.as_deref(), Some("atelier-e-studio-design"));
         assert_eq!(
             d.as_deref(),
-            Some("Studio de design de relais : fondations, deux directions artistiques avec maquettes et motion, juge indépendant")
+            Some("Studio de design de atelier-e : fondations, deux directions artistiques avec maquettes et motion, juge indépendant")
         );
         // « filename » finit par « name » : la cle doit etre un mot entier.
         let (n, d) = meta_du_script("export const meta = { filename: 'non', name: \"l'outil\", description: 'l\\'agent dit' }");
@@ -906,9 +906,9 @@ mod essais {
         let mut s = HashMap::new();
         s.insert(
             "wf_5f0590e4-61c".to_string(),
-            PathBuf::from(r"C:\x\workflows\scripts\relais-briques-wf_5f0590e4-61c.js"),
+            PathBuf::from(r"C:\x\workflows\scripts\atelier-e-briques-wf_5f0590e4-61c.js"),
         );
-        assert_eq!(nom_de_fichier("wf_5f0590e4-61c", &s), "relais-briques");
+        assert_eq!(nom_de_fichier("wf_5f0590e4-61c", &s), "atelier-e-briques");
         assert_eq!(nom_de_fichier("wf_absent", &s), "");
     }
 
@@ -925,11 +925,11 @@ mod essais {
             agents: 1,
             projet: projet.into(),
         };
-        let mut v = vec![c("a", "relais", 10), c("b", "vigie", 30), c("c", "relais", 50)];
+        let mut v = vec![c("a", "atelier-e", 10), c("b", "vigie", 30), c("c", "atelier-e", 50)];
         trier(&mut v);
         let cat = Catalogue { chantiers: v, complet: true };
-        assert_eq!(cat.projets(), vec!["relais", "vigie"]);
-        assert_eq!(cat.de("relais").map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["c", "a"]);
+        assert_eq!(cat.projets(), vec!["atelier-e", "vigie"]);
+        assert_eq!(cat.de("atelier-e").map(|c| c.id.as_str()).collect::<Vec<_>>(), vec!["c", "a"]);
     }
 }
 
@@ -955,7 +955,7 @@ mod essais_garde {
             debut: SystemTime::UNIX_EPOCH + Duration::from_secs(1_793_109_127),
             derniere: SystemTime::UNIX_EPOCH + Duration::from_secs(1_793_109_127),
             agents: 7,
-            projet: "cours-llm".into(),
+            projet: "atelier-d".into(),
         };
         m.termines.insert("wf_a".into(), (42, SystemTime::UNIX_EPOCH + Duration::from_millis(1_793_109_127_250), c));
         m.metas.insert(PathBuf::from(r"C:\s\x.js"), (Some("design".into()), None));

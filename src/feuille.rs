@@ -33,6 +33,7 @@ pub enum Action {
     OuvrirPage,
     Reessayer,
     Reculer,
+    Avancer,
     RevoirPassage,
     ConfirmerLocal,
     OuvrirAilleurs,
@@ -52,6 +53,13 @@ pub struct Entree<'a> {
     pub ecoule: f32,
     /// Ce que la page ouverte a repondu a la recherche du passage.
     pub sonde: Sonde,
+    /// Le moteur garde-t-il une page apres celle-ci (on a recule) : « Avancer »
+    /// n'est une cible que dans ce cas, sinon il est grise.
+    pub peut_avancer: bool,
+    /// Ce que la page vivante a repondu la derniere fois qu'elle a ete ouverte
+    /// sur ce lien (`Trouve` ou `NonRetrouve`), gardee quand la page se referme :
+    /// l'extrait, lu sans script, ne dit pas « cite » sans ce qu'elle a repondu.
+    pub verdict: Sonde,
 }
 
 pub struct Texte {
@@ -96,6 +104,9 @@ pub struct Composee {
 // Les mesures nominales, en points a l'echelle 1. Aucun corps nouveau : ceux
 // du systeme (20, 15, 13, 12).
 const CARTE_MAX: f32 = 620.0;
+/// En dessous de cette largeur (en points), la citation du bandeau de la page
+/// passe sur sa propre rangee.
+const LARGEUR_CITATION_MIN: f32 = 240.0;
 const GOUTTIERE: f32 = 28.0;
 const GOUTTIERE_ETROITE: f32 = 16.0;
 const MARGE: f32 = 24.0;
@@ -211,6 +222,13 @@ impl<'a> Corps<'a> {
 
 /// Coupe pour tenir sur `n` lignes : le texte est deja borne en signes par
 /// l'extraction ; ceci ne sert qu'aux phrases de l'agent, d'une longueur libre.
+/// Deux traits d'union de suite se fondent en un seul trait long dans la police
+/// de la vigie : `xn--pple` se lirait `xn—pple`. Une espace de largeur nulle
+/// entre eux garde chaque trait.
+fn sans_trait_fondu(s: &str) -> String {
+    s.replace("--", "-\u{200c}-")
+}
+
 fn borner(s: &str, n: usize) -> String {
     let c: Vec<char> = s.chars().collect();
     if c.len() <= n {
@@ -223,7 +241,12 @@ fn borner(s: &str, n: usize) -> String {
     format!("{}…", c[..f].iter().collect::<String>().trim_end())
 }
 
-fn kicker(etat: &Etat) -> (&'static str, bool) {
+fn kicker(etat: &Etat, verdict: Sonde) -> (&'static str, bool) {
+    match (etat, verdict) {
+        (Etat::Passage(_) | Etat::Introuvable { .. }, Sonde::NonRetrouve) => return ("Passage non retrouvé dans la page", false),
+        (Etat::Introuvable { .. }, Sonde::Trouve) => return ("Passage retrouvé dans la page", false),
+        _ => {}
+    }
     match etat {
         Etat::Chargement => ("Lecture de la page", false),
         Etat::Passage(_) => ("Passage cité", false),
@@ -236,7 +259,7 @@ fn kicker(etat: &Etat) -> (&'static str, bool) {
         Etat::Refuse(_) => ("Lien refusé", true),
         Etat::Local => ("Ce lien vise cet ordinateur", true),
         Etat::HorsMaquette => ("Page non préparée", false),
-        Etat::Redirection { contenu, .. } => kicker(contenu),
+        Etat::Redirection { contenu, .. } => kicker(contenu, verdict),
     }
 }
 
@@ -281,7 +304,7 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     let ix = cx + marge;
     let a = passage::adresse(entree.url);
     let classe = passage::classer(entree.url);
-    let (tete, alerte) = kicker(entree.etat);
+    let (tete, alerte) = kicker(entree.etat, entree.verdict);
 
     let mut c = Corps { systeme, e, x: ix, l: iw, textes: Vec::new(), aplats: Vec::new(), cibles: Vec::new() };
     // Le contenu se compose depuis y = 0, puis la carte se pose ou il faut.
@@ -308,7 +331,7 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     // s'abrege. Une ecriture trompeuse se montre brute, et le dit.
     // Un schema refuse n'a pas d'hote : son nom tient la place de l'hote.
     let nom_hote = if a.hote.is_empty() { format!("{}:", a.schema) } else { a.hote.clone() };
-    let (b_hote, l_hote) = mesurer(c.systeme, &nom_hote, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
+    let (b_hote, l_hote) = mesurer(c.systeme, &sans_trait_fondu(&nom_hote), LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
     c.textes.push(Texte { tampon: b_hote, x: ix, y, couleur: palette::encre1() });
     let reste = (iw - l_hote - 8.0 * e).max(0.0);
     if reste > 40.0 * e && !matches!(entree.etat, Etat::Refuse(_)) {
@@ -319,7 +342,11 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     y += LECTURE_H * e;
     if a.trompeuse {
         y += 2.0 * e;
-        y += c.texte("Écriture trompeuse : l’adresse est montrée telle qu’elle est envoyée.", REPERE, REPERE_H, Weight::NORMAL, palette::alerte(), y);
+        let mot = if a.info.is_empty() { "Écriture trompeuse : l’hôte ci-dessus est celui qui répond." } else { "Écriture trompeuse : seul ce qui suit @ répond, ce qui précède n’est qu’un nom." };
+        y += c.texte(mot, REPERE, REPERE_H, Weight::NORMAL, palette::alerte(), y);
+        // L'adresse entiere, telle qu'envoyee, avec ce qui precede l'arobase.
+        let brute = if a.info.is_empty() { a.hote.clone() } else { format!("{}@{}", a.info, a.hote) };
+        y += c.texte(&sans_trait_fondu(&borner(&brute, 120)), REPERE, REPERE_H, Weight::NORMAL, palette::encre2(), y);
     }
     if matches!(entree.etat, Etat::Refuse(_)) {
         // Un schema refuse se montre en entier, brut : c'est tout ce qu'il y a a voir.
@@ -352,7 +379,12 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
             y = demande(&mut c, entree.page.map_or("", |p| p.invite.as_str()), y);
         }
         Etat::Introuvable { citation, debut_page } => {
-            y += c.texte("Le texte que l’agent avait cité n’est pas dans la page d’aujourd’hui.", LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+            let ligne = if entree.verdict == Sonde::Trouve {
+                "Le texte lu sans script ne contenait pas le passage ; la page ouverte l’a montré."
+            } else {
+                "Le texte que l’agent avait cité n’est pas dans la page d’aujourd’hui."
+            };
+            y += c.texte(ligne, LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
             y += 12.0 * e;
             y = citation_non_verifiee(&mut c, citation, y);
             if !debut_page.is_empty() {
@@ -397,9 +429,10 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     // Une phrase sur ce que la vigie a lu, quand elle a lu quelque chose.
     if matches!(etat, Etat::Passage(_) | Etat::Introuvable { .. } | Etat::SansPassage { .. }) {
         let rel = entree.page.map(|p| p.releve.as_str()).filter(|r| !r.is_empty());
+        let fin = if entree.verdict == Sonde::NonRetrouve { "La page ouverte ne l’a pas montré." } else { "La page n’est pas ouverte." };
         let t = match rel {
-            Some(r) => format!("Texte lu sans script ni cookie, le {}. La page n’est pas ouverte.", date_fr(r)),
-            None => "Texte lu sans script ni cookie. La page n’est pas ouverte.".to_string(),
+            Some(r) => format!("Texte lu sans script ni cookie, le {}. {fin}", date_fr(r)),
+            None => format!("Texte lu sans script ni cookie. {fin}"),
         };
         y += 16.0 * e;
         y += c.texte(&t, PETIT, PETIT_H, Weight::NORMAL, palette::encre3(), y);
@@ -434,7 +467,9 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
 
     // La carte, posee ou l'oeil tombe : un peu au-dessus du milieu.
     let hauteur = y.min(h - 2.0 * gut);
-    let cy = ((h - hauteur) * 0.42).max(gut).round();
+    // Le haut est fixe, quel que soit l'etat : en passant du chargement au
+    // resultat, la carte ne saute pas, elle ne fait que grandir vers le bas.
+    let cy = (h * 0.12).min(h - hauteur - gut).max(gut).round();
     for t in &mut c.textes {
         t.y += cy;
     }
@@ -590,23 +625,30 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     let mut aplats: Vec<Forme> = vec![forme([0.0, 0.0, l, h], palette::fond_octets(), 1.0, 0.0)];
     let mut cibles: Vec<(Boite, Action)> = Vec::new();
 
-    // L'en-tete : reculer, avancer, l'adresse reelle, fermer.
+    // L'en-tete : reculer, avancer, l'adresse reelle, fermer. Reculer a toujours
+    // quelque chose a faire (au bout de l'historique de la page, il revient au
+    // passage) ; avancer n'a de cible que si le moteur garde une page apres, et
+    // sinon il est grise, a la meme place : le bouton ne bouge pas.
     let entete_h = 52.0 * e;
     let by = (entete_h - BOUTON * e) * 0.5;
     let recul = Boite { x: gut, y: by, l: BOUTON * e, h: BOUTON * e };
-    let avance = Boite { x: gut + BOUTON * e + 4.0 * e, y: by, l: BOUTON * e, h: BOUTON * e };
+    let avance = Boite { x: recul.x + recul.l + 2.0 * e, y: by, l: BOUTON * e, h: BOUTON * e };
     let ferme = Boite { x: l - gut - BOUTON * e, y: by, l: BOUTON * e, h: BOUTON * e };
-    for (b, signe, c) in [(recul, "‹", palette::encre1()), (avance, "›", palette::encre3()), (ferme, "×", palette::encre2())] {
+    let couleur_avance = if entree.peut_avancer { palette::encre1() } else { palette::encre3() };
+    for (b, signe, c) in [(recul, "‹", palette::encre1()), (avance, "›", couleur_avance), (ferme, "×", palette::encre2())] {
         let (t, lt) = mesurer(systeme, signe, GRAND * e, GRAND_H * e, Weight::NORMAL);
         textes.push(Texte { tampon: t, x: b.x + (b.l - lt) * 0.5, y: b.y + (b.h - GRAND_H * e) * 0.5, couleur: c });
     }
     cibles.push((recul, Action::Reculer));
+    if entree.peut_avancer {
+        cibles.push((avance, Action::Avancer));
+    }
     cibles.push((ferme, Action::Fermer));
     let x0 = avance.x + avance.l + 14.0 * e;
     let (b_esc, l_esc) = mesurer(systeme, "Échap", PETIT * e, PETIT_H * e, Weight::NORMAL);
     textes.push(Texte { tampon: b_esc, x: ferme.x - 8.0 * e - l_esc, y: by + (BOUTON * e - PETIT_H * e) * 0.5, couleur: palette::encre3() });
     let dispo = (ferme.x - 8.0 * e - l_esc - 14.0 * e - x0).max(40.0 * e);
-    let (b_hote, l_hote) = mesurer(systeme, &a.hote, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
+    let (b_hote, l_hote) = mesurer(systeme, &sans_trait_fondu(&a.hote), LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
     textes.push(Texte { tampon: b_hote, x: x0, y: (entete_h - LECTURE_H * e) * 0.5, couleur: palette::encre1() });
     let reste = dispo - l_hote - 8.0 * e;
     if reste > 40.0 * e {
@@ -616,7 +658,11 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     aplats.push(forme([0.0, entete_h - e, l, (1.0 * e).max(1.0)], palette::filet(), 1.0, 0.0));
 
     // Le bandeau : le passage reste dit, meme si la page ne le montre pas.
-    let bandeau_h = 44.0 * e;
+    // Une rangee : le mot, la citation, « Revoir ». Quand la citation n'a plus la
+    // place de se lire sur cette rangee (fenetre etroite), elle passe sur une
+    // seconde, a pleine largeur : deux mots coupes ne disent plus ce qu'on a cite.
+    let mut bandeau_h = 44.0 * e;
+    let plaque = aplats.len();
     aplats.push(forme([0.0, entete_h, l, bandeau_h], palette::plaque(), 1.0, 0.0));
     let (mot, citation, couleur_mot) = match entree.etat {
         Etat::Passage(x) => ("Passage cité", Some(x.passage.clone()), palette::encre1()),
@@ -630,13 +676,17 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     };
     let mot = match (entree.sonde, passage::etat_de_fond(entree.etat)) {
         (Sonde::NonRetrouve, Etat::Passage(_) | Etat::Introuvable { .. }) => "Passage non retrouvé dans la page",
+        // Absent du texte lu sans script, mais la page vivante l'avait, apres son chargement.
+        (Sonde::Trouve, Etat::Introuvable { .. }) => "Passage retrouvé dans la page",
+        (Sonde::Indisponible, _) if !crate::navigateur::page_activee() => "Le moteur de pages est désactivé",
         (Sonde::Indisponible, _) => "Le moteur de pages n’a pas démarré",
         _ => mot,
     };
     let (b_mot, l_mot) = mesurer(systeme, mot, REPERE * e, REPERE_H * e, Weight::MEDIUM);
     let ty = entete_h + (bandeau_h - REPERE_H * e) * 0.5;
     let mut x = gut;
-    if matches!(entree.etat, Etat::Passage(_)) && !matches!(entree.sonde, Sonde::NonRetrouve | Sonde::Indisponible) {
+    let retrouve_apres = matches!(passage::etat_de_fond(entree.etat), Etat::Introuvable { .. }) && entree.sonde == Sonde::Trouve;
+    if (matches!(entree.etat, Etat::Passage(_)) || retrouve_apres) && !matches!(entree.sonde, Sonde::NonRetrouve | Sonde::Indisponible) {
         // Le point d'ambre : le meme signe que dans le fil, avant le clic.
         aplats.push(forme([x, entete_h + (bandeau_h - 8.0 * e) * 0.5, 8.0 * e, 8.0 * e], AMBRE, 1.0, 4.0 * e));
         x += 16.0 * e;
@@ -652,9 +702,15 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     if let Some(cit) = citation {
         let debut = x + l_mot + 12.0 * e;
         let largeur = (revoir.x - 14.0 * e - debut).max(0.0);
-        if largeur > 60.0 * e {
+        if largeur >= LARGEUR_CITATION_MIN * e {
             let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &format!("« {} »", cit), largeur);
             textes.push(Texte { tampon: b, x: debut, y: ty, couleur: palette::encre2() });
+        } else if l - 2.0 * gut > 60.0 * e {
+            let seconde = entete_h + bandeau_h - 6.0 * e;
+            let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &format!("« {} »", cit), l - 2.0 * gut);
+            textes.push(Texte { tampon: b, x: gut, y: seconde, couleur: palette::encre2() });
+            bandeau_h += REPERE_H * e + 4.0 * e;
+            aplats[plaque] = forme([0.0, entete_h, l, bandeau_h], palette::plaque(), 1.0, 0.0);
         }
     }
     aplats.push(forme([0.0, entete_h + bandeau_h - e, l, (1.0 * e).max(1.0)], palette::filet(), 1.0, 0.0));
@@ -666,14 +722,16 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     let sombre = Color::rgb(0x1A, 0x1A, 0x1A);
     let titre_zone = if entree.sonde == Sonde::Indisponible { "La page ne peut pas s’afficher" } else { "La page s’affiche ici" };
     let (b1, l1) = mesurer(systeme, titre_zone, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
-    let pied_zone = if entree.sonde == Sonde::Indisponible {
+    let pied_zone = if entree.sonde == Sonde::Indisponible && !crate::navigateur::page_activee() {
+        "L’ouverture de la page est coupée (VIGIE_SANS_PAGE). Rien n’a été ouvert."
+    } else if entree.sonde == Sonde::Indisponible {
         "Le moteur de pages de Windows (WebView2) n’a pas démarré. Rien n’a été ouvert."
     } else {
         "Fenêtre native de la page : la capture de la vigie ne la montre pas."
     };
     let (b2, l2) = mesurer(systeme, pied_zone, REPERE * e, REPERE_H * e, Weight::NORMAL);
     let (b3, l3) = if etroite {
-        mesurer(systeme, if entree.sonde == Sonde::Indisponible { "WebView2 n’a pas démarré." } else { "Fenêtre native, hors capture." }, REPERE * e, REPERE_H * e, Weight::NORMAL)
+        mesurer(systeme, if entree.sonde == Sonde::Indisponible && !crate::navigateur::page_activee() { "Page désactivée." } else if entree.sonde == Sonde::Indisponible { "WebView2 n’a pas démarré." } else { "Fenêtre native, hors capture." }, REPERE * e, REPERE_H * e, Weight::NORMAL)
     } else {
         (b2, l2)
     };
@@ -771,7 +829,7 @@ mod essais {
                 let (l, h) = (lp * e, hp * e);
                 for etat in &etats {
                     for vue in [Vue::Passage, Vue::Page] {
-                        let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat, page: Some(&p), vue, ecoule: 2.0, sonde: Sonde::Attente }, l, h, e);
+                        let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat, page: Some(&p), vue, ecoule: 2.0, sonde: Sonde::Attente, peut_avancer: false, verdict: Sonde::Attente }, l, h, e);
                         let nom = format!("{lp}x{hp} x{e} {etat:?} {vue:?}");
                         if vue == Vue::Passage {
                             assert!(c.carte.x >= 0.0 && c.carte.y >= 0.0 && c.carte.x + c.carte.l <= l + 0.5 && c.carte.y + c.carte.h <= h + 0.5, "carte hors fenetre : {nom} {:?}", c.carte);
@@ -797,6 +855,122 @@ mod essais {
         }
     }
 
+    /// D3, objection du juge de design : du chargement au resultat, la carte
+    /// sautait de 133 points. Son haut ne bouge plus d'un etat a l'autre.
+    #[test]
+    fn la_carte_garde_son_haut_d_un_etat_a_l_autre() {
+        let mut s = systeme();
+        let p = une_page();
+        for e in [1.0f32, 1.25, 2.0] {
+            let (l, h) = (766.4 * e, 784.8 * e);
+            let haut = |s: &mut FontSystem, etat: &Etat| composer(s, &Entree { url: &p.url, courante: None, etat, page: Some(&p), vue: Vue::Passage, ecoule: 2.0, sonde: Sonde::Attente, peut_avancer: false, verdict: Sonde::Attente }, l, h, e).carte.y;
+            let repere = haut(&mut s, &Etat::Chargement);
+            for etat in [Etat::Echec(Echec::Absente), Etat::HorsLigne, Etat::Connexion, Etat::Local, Etat::SansPassage { debut_page: "Début.".into() }] {
+                assert_eq!(haut(&mut s, &etat), repere, "le haut de la carte bouge : {etat:?} x{e}");
+            }
+        }
+    }
+
+    /// Objection du juge de design (C2, heuristique 5) : l'ecriture trompeuse
+    /// cachait `apple.com@`, la moitie qui trompe. Elle se montre, et les deux
+    /// traits d'union de `xn--` ne fondent plus en un.
+    #[test]
+    fn l_ecriture_trompeuse_montre_ce_qui_precede_l_arobase() {
+        let mut s = systeme();
+        let url = "https://apple.com@xn--pple-43d.example/connexion?session=1";
+        let c = composer(&mut s, &Entree { url, courante: None, etat: &Etat::Connexion, page: None, vue: Vue::Passage, ecoule: 0.0, sonde: Sonde::Attente, peut_avancer: false, verdict: Sonde::Attente }, 766.4, 784.8, 1.0);
+        let lignes: Vec<String> = c.textes.iter().map(|t| t.debut()).collect();
+        assert!(lignes.iter().any(|l| l.starts_with("apple.com@xn")), "l'adresse brute n'est pas montree : {lignes:?}");
+        assert!(lignes.iter().any(|l| l.contains("-\u{200c}-pple")), "les deux traits d'union fondent : {lignes:?}");
+        assert!(lignes.iter().any(|l| l.starts_with("Écriture trompeuse")));
+    }
+
+    /// Objection du juge de design (C10) : en fenetre etroite, la citation du
+    /// bandeau tombait a deux mots. Elle passe sur sa rangee, a pleine largeur, et
+    /// la page garde plus de 60 % de la hauteur.
+    #[test]
+    fn la_citation_du_bandeau_se_lit_en_fenetre_etroite() {
+        let mut s = systeme();
+        let p = une_page();
+        let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
+        for e in [1.0f32, 1.25, 2.0] {
+            let (l, h) = (480.0 * e, 760.0 * e);
+            let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat: &Etat::Passage(x.clone()), page: Some(&p), vue: Vue::Page, ecoule: 0.0, sonde: Sonde::Attente, peut_avancer: false, verdict: Sonde::Attente }, l, h, e);
+            let ligne = c.textes.iter().find(|t| t.debut().starts_with('«')).expect("la citation n'est pas dessinee");
+            let texte: String = ligne.tampon.lines.iter().map(|l| l.text().to_string()).collect::<Vec<_>>().join(" ");
+            assert!(texte.split_whitespace().count() >= 8 && !texte.contains('…'), "la citation est coupee a {} mots : {texte} (x{e})", texte.split_whitespace().count());
+            assert!(ligne.boite().x + ligne.boite().l <= l + 0.5, "la citation passe le bord (x{e})");
+            let z = c.zone_page.expect("la page a son rectangle");
+            assert!(z.h >= 0.6 * h, "page trop basse : {z:?} x{e}");
+        }
+    }
+
+    /// Un bouton qui ne fait rien ment : ~~l'en-tete de la page n'a que reculer,
+    /// fermer et revoir~~ (retire contre la reponse 5 de Stone : « un bouton retour
+    /// (et avancer) »). Reculer et Avancer sont dans l'en-tete, a la meme place ;
+    /// Avancer n'est une cible que si le moteur garde une page apres, et sinon il est
+    /// dessine grise, sans cible.
+    #[test]
+    fn l_entete_de_la_page_a_reculer_et_avancer_et_avancer_se_grise() {
+        let mut s = systeme();
+        let p = une_page();
+        let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
+        for e in [1.0f32, 1.25, 1.5, 2.0] {
+            let rendu = |s: &mut FontSystem, peut_avancer: bool| {
+                composer(s, &Entree { url: &p.url, courante: None, etat: &Etat::Passage(x.clone()), page: Some(&p), vue: Vue::Page, ecoule: 0.0, sonde: Sonde::Attente, peut_avancer, verdict: Sonde::Attente }, 766.4 * e, 784.8 * e, e)
+            };
+            let grise = rendu(&mut s, false);
+            let mut actions: Vec<String> = grise.cibles.iter().map(|(_, a)| format!("{a:?}")).collect();
+            actions.sort();
+            assert_eq!(actions, vec!["Fermer", "Reculer", "RevoirPassage"], "x{e}");
+            let signe = |c: &Composee| c.textes.iter().find(|t| t.debut() == "›").map(|t| (t.x, t.y, t.couleur));
+            let (gx, gy, gc) = signe(&grise).expect("le signe « avancer » n'est pas dessine");
+            assert_eq!(gc, palette::encre3(), "avancer doit etre grise sans page apres, x{e}");
+
+            let vive = rendu(&mut s, true);
+            let mut actions: Vec<String> = vive.cibles.iter().map(|(_, a)| format!("{a:?}")).collect();
+            actions.sort();
+            assert_eq!(actions, vec!["Avancer", "Fermer", "Reculer", "RevoirPassage"], "x{e}");
+            let (vx, vy, vc) = signe(&vive).unwrap();
+            assert_eq!(vc, palette::encre1(), "x{e}");
+            assert_eq!((gx, gy), (vx, vy), "le bouton bouge entre ses deux etats, x{e}");
+            // La cible d'« avancer » est celle d'une main : 24 pt au moins (WCAG 2.5.8).
+            let (b, _) = vive.cibles.iter().find(|(_, a)| *a == Action::Avancer).unwrap();
+            assert!(b.l >= 24.0 * e && b.h >= 24.0 * e, "cible trop petite : {b:?} x{e}");
+            let (r, _) = vive.cibles.iter().find(|(_, a)| *a == Action::Reculer).unwrap();
+            assert!(b.x >= r.x + r.l, "les deux boutons se recouvrent, x{e}");
+        }
+    }
+
+    /// Objection C3(b) du juge de design : l'extrait disait « Passage cite » quand
+    /// la page vivante ne le montrait pas (callstack). Il garde ce que la page a repondu.
+    #[test]
+    fn l_extrait_ne_dit_pas_cite_quand_la_page_vivante_ne_l_a_pas_montre() {
+        let mut s = systeme();
+        let p = une_page();
+        let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
+        let etat = Etat::Passage(x);
+        assert_eq!(kicker(&etat, Sonde::Attente).0, "Passage cité");
+        assert_eq!(kicker(&etat, Sonde::Trouve).0, "Passage cité");
+        assert_eq!(kicker(&etat, Sonde::NonRetrouve).0, "Passage non retrouvé dans la page");
+        let introuvable = Etat::Introuvable { citation: "x".into(), debut_page: String::new() };
+        assert_eq!(kicker(&introuvable, Sonde::Attente).0, "Passage introuvable sur cette page");
+        assert_eq!(kicker(&introuvable, Sonde::Trouve).0, "Passage retrouvé dans la page");
+        for e in [1.0f32, 1.25, 1.5, 2.0] {
+            let rendu = |s: &mut FontSystem, verdict: Sonde| {
+                composer(s, &Entree { url: &p.url, courante: None, etat: &etat, page: Some(&p), vue: Vue::Passage, ecoule: 0.0, sonde: Sonde::Attente, peut_avancer: false, verdict }, 766.4 * e, 784.8 * e, e)
+            };
+            let dit = |c: &Composee, debut: &str| c.textes.iter().any(|t| t.debut().starts_with(debut));
+            let non = rendu(&mut s, Sonde::NonRetrouve);
+            assert!(dit(&non, "Passage non retrouvé"), "l'extrait ne dit pas que la page ne l'a pas montre, x{e}");
+            assert!(!dit(&non, "Passage cité"), "l'extrait dit encore « cite », x{e}");
+            let neutre = rendu(&mut s, Sonde::Attente);
+            assert!(dit(&neutre, "Passage cité") && !dit(&neutre, "Passage non retrouvé"), "x{e}");
+            // La carte garde son haut : le mot change, la carte ne bouge pas.
+            assert_eq!(non.carte.y, neutre.carte.y, "x{e}");
+        }
+    }
+
     /// Le temoin du test ci-dessus : une carte qui ignore la fenetre, sur un
     /// ecran de 300 pixels, est bien vue comme debordante.
     #[test]
@@ -804,7 +978,7 @@ mod essais {
         let mut s = systeme();
         let p = une_page();
         let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
-        let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat: &Etat::Passage(x), page: Some(&p), vue: Vue::Passage, ecoule: 0.0, sonde: Sonde::Attente }, 300.0, 300.0, 1.0);
+        let c = composer(&mut s, &Entree { url: &p.url, courante: None, etat: &Etat::Passage(x), page: Some(&p), vue: Vue::Passage, ecoule: 0.0, sonde: Sonde::Attente, peut_avancer: false, verdict: Sonde::Attente }, 300.0, 300.0, 1.0);
         // La hauteur d'un passage ne tient pas dans 300 points : le test
         // ci-dessus le verrait comme « carte hors fenetre ».
         assert!(c.carte.y + c.carte.h > 300.0 || c.textes.iter().any(|t| t.boite().y + t.boite().h > 300.0));
@@ -823,6 +997,12 @@ mod essais {
         let b = borner("un deux trois quatre cinq six sept", 14);
         assert!(b.ends_with('…') && b.chars().count() <= 15, "{b}");
         assert!(!b.contains("troi ") && b.starts_with("un deux"));
+    }
+
+    #[test]
+    fn borner_recule_jusqu_a_l_espace_quand_la_coupe_tombe_dans_un_mot() {
+        assert_eq!(borner("aaaa bbbbbbbb cc", 8), "aaaa…");
+        assert_eq!(borner("aaaa bbbb cc", 9), "aaaa bbbb…");
     }
 
     #[test]
@@ -859,4 +1039,41 @@ mod essais {
         let t = explication(&Etat::Chargement, "a.org", 12.0).unwrap();
         assert!(t.contains("a.org répond lentement"));
     }
+
+    /// Le bandeau de la page ouverte dit ce que la recherche du passage a
+    /// trouve, et l'en-tete dit l'hote ou la page est vraiment, pas celui du clic.
+    #[test]
+    fn le_bandeau_de_la_page_suit_la_sonde_et_l_en_tete_suit_la_page() {
+        let mut s = systeme();
+        let p = une_page();
+        let x = passage::extraire(&p.texte, p.citation.as_deref().unwrap()).unwrap();
+        let introuvable = Etat::Introuvable { citation: p.citation.clone().unwrap(), debut_page: String::new() };
+        let mut debuts = |etat: &Etat, sonde: Sonde, courante: Option<&str>| -> Vec<String> {
+            let c = composer(&mut s, &Entree { url: &p.url, courante, etat, page: Some(&p), vue: Vue::Page, ecoule: 2.0, sonde, peut_avancer: false, verdict: Sonde::Attente }, 766.4, 784.8, 1.0);
+            c.textes.iter().map(|t| t.debut()).collect()
+        };
+        let a_un = |v: &[String], debut: &str| v.iter().any(|t| t.starts_with(debut));
+        let v = debuts(&Etat::Passage(x.clone()), Sonde::Attente, None);
+        assert!(a_un(&v, "Passage cité") && a_un(&v, "docs.expo.dev"), "{v:?}");
+        let v = debuts(&Etat::Passage(x.clone()), Sonde::NonRetrouve, None);
+        assert!(a_un(&v, "Passage non retrouvé") && !a_un(&v, "Passage cité"), "{v:?}");
+        let v = debuts(&introuvable, Sonde::Trouve, None);
+        assert!(a_un(&v, "Passage retrouvé"), "{v:?}");
+        let v = debuts(&introuvable, Sonde::Attente, None);
+        assert!(a_un(&v, "Passage introuvable"), "{v:?}");
+        let v = debuts(&Etat::Passage(x), Sonde::Indisponible, None);
+        assert!(a_un(&v, "Le moteur de pages") && a_un(&v, "La page ne peut pas"), "{v:?}");
+        // Quand la page est coupee (VIGIE_SANS_PAGE, navigateur::page_activee), la
+        // feuille le dit, au lieu de dire que le moteur n'a pas demarre.
+        let (dit, pas_dit) = if crate::navigateur::page_activee() {
+            ("Le moteur de pages n’a pas", "Le moteur de pages est dés")
+        } else {
+            ("Le moteur de pages est dés", "Le moteur de pages n’a pas")
+        };
+        assert!(a_un(&v, dit) && !a_un(&v, pas_dit), "{v:?}");
+        // Stone a suivi un lien de la page : l'en-tete dit l'hote d'arrivee.
+        let v = debuts(&introuvable, Sonde::Attente, Some("https://autre.example.org/chemin"));
+        assert!(a_un(&v, "autre.example.org") && !a_un(&v, "docs.expo.dev"), "{v:?}");
+    }
+
 }

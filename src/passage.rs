@@ -12,7 +12,10 @@
 //! force les etats qu'un reseau sain ne montre pas.
 
 use std::collections::HashMap;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::path::Path;
+
+use crate::reseau::est_privee;
 
 /// Un lien reconnu dans un texte : sa place en octets, et l'adresse.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,6 +92,40 @@ pub fn liens(texte: &str) -> Vec<LienTexte> {
     sortie
 }
 
+/// Le texte que la vigie dessine pour un texte qui porte des liens, et les liens
+/// dans ce texte. Un lien Markdown `[titre](adresse)` s'affiche par son titre
+/// seul ; l'adresse n'est plus du texte, elle reste dans le lien, qui la tient de
+/// la donnee et non de ce qui s'affiche. Une adresse nue s'affiche telle quelle.
+/// Un titre vide ne cache pas l'adresse : elle s'affiche. Les plages rendues sont
+/// en octets du texte affiche.
+pub fn afficher_liens(texte: &str) -> (String, Vec<LienTexte>) {
+    let mut affiche = String::with_capacity(texte.len());
+    let mut sortie = Vec::new();
+    let mut curseur = 0;
+    for l in liens(texte) {
+        affiche.push_str(&texte[curseur..l.debut]);
+        let debut = affiche.len();
+        match l.libelle.filter(|&(a, b)| texte[a..b].trim().len() > 0) {
+            Some((a, b)) => affiche.push_str(&texte[a..b]),
+            None => affiche.push_str(&l.url),
+        }
+        sortie.push(LienTexte { debut, fin: affiche.len(), url: l.url, libelle: None });
+        curseur = l.fin;
+    }
+    affiche.push_str(&texte[curseur..]);
+    (affiche, sortie)
+}
+
+/// Une ligne de geste est-elle un lien : `WebFetch` (son detail est l'adresse) ou
+/// une commande qui porte une adresse. C'est ce qui fait sa hauteur de cible.
+pub fn geste_a_un_lien(outil: &str, corps: &str) -> bool {
+    match outil {
+        "WebFetch" => classer(corps.trim()) != Classe::Gabarit,
+        "Bash" | "PowerShell" => liens(corps).iter().any(|l| classer(&l.url) != Classe::Gabarit),
+        _ => false,
+    }
+}
+
 /// Le premier debut d'adresse dans `s` : un schema reconnu, precede d'une
 /// frontiere (le debut, un blanc ou un signe), sauf `data:` qui exige son type.
 fn trouver_debut(s: &str) -> Option<usize> {
@@ -156,12 +193,77 @@ pub fn classer(url: &str) -> Classe {
     if reste.contains(['{', '}', '$', '*', '<', '>', '|', '\\']) || reste.contains("example.com") || reste.contains("...") {
         return Classe::Gabarit;
     }
-    let a = adresse(url);
+    // Le moteur ignore tabulations et sauts de ligne dans une adresse.
+    let propre: String = url.chars().filter(|c| !matches!(c, '\t' | '\r' | '\n')).collect();
+    let a = adresse(&propre);
     let nu = a.hote_nu();
-    if nu == "localhost" || nu.ends_with(".localhost") || nu == "0.0.0.0" || nu.starts_with("127.") || nu == "[::1]" || nu.ends_with(".local") {
+    let nom = nu.trim_end_matches('.');
+    if nom == "localhost" || nom.ends_with(".localhost") || nom.ends_with(".local") || ip_de_l_hote(nu).is_some_and(est_privee) {
         return Classe::Local;
     }
     if schema == "http" { Classe::NonChiffre } else { Classe::Web }
+}
+
+/// L'adresse IP que le moteur lirait dans cet hote, quelle qu'en soit
+/// l'ecriture : `2130706433`, `0x7f.1`, `0177.0.0.1`, `127.1`, `[::ffff:7f00:1]`,
+/// points et chiffres pleine chasse, pourcentages. Un nom de domaine ne donne rien.
+pub fn ip_de_l_hote(nu: &str) -> Option<IpAddr> {
+    if let Some(interieur) = nu.strip_prefix('[') {
+        let sans_zone = interieur.trim_end_matches(']').split('%').next().unwrap_or("");
+        return sans_zone.parse::<Ipv6Addr>().ok().map(IpAddr::V6);
+    }
+    let normal: String = decoder_pourcents(nu)
+        .chars()
+        .map(|c| match c {
+            '\u{3002}' | '\u{ff0e}' | '\u{ff61}' => '.',
+            '\u{ff10}'..='\u{ff19}' => char::from(b'0' + (c as u32 - 0xff10) as u8),
+            c => c,
+        })
+        .collect();
+    let mut parties: Vec<&str> = normal.split('.').collect();
+    if parties.last() == Some(&"") && parties.len() > 1 {
+        parties.pop();
+    }
+    if parties.len() > 4 {
+        return None;
+    }
+    let mut nombres: Vec<u64> = Vec::new();
+    for p in &parties {
+        let (chiffres, base) = if let Some(h) = p.strip_prefix("0x").or_else(|| p.strip_prefix("0X")) {
+            (h, 16)
+        } else if p.len() > 1 && p.starts_with('0') {
+            (&p[1..], 8)
+        } else {
+            (*p, 10)
+        };
+        let n = if chiffres.is_empty() && base == 16 { 0 } else { u64::from_str_radix(chiffres, base).ok()? };
+        nombres.push(n);
+    }
+    let (dernier, debut) = nombres.split_last()?;
+    if debut.iter().any(|&n| n > 255) || *dernier >= 256u64.pow(5 - nombres.len() as u32) {
+        return None;
+    }
+    let mut v = *dernier;
+    for (i, n) in debut.iter().enumerate() {
+        v += n << (8 * (3 - i));
+    }
+    Some(IpAddr::V4(Ipv4Addr::from(v as u32)))
+}
+
+fn decoder_pourcents(s: &str) -> String {
+    let o = s.as_bytes();
+    let mut sortie = Vec::with_capacity(o.len());
+    let mut i = 0;
+    while i < o.len() {
+        if o[i] == b'%' && i + 2 < o.len() && o[i + 1].is_ascii_hexdigit() && o[i + 2].is_ascii_hexdigit() {
+            sortie.push(u8::from_str_radix(&s[i + 1..i + 3], 16).unwrap_or(b'%'));
+            i += 3;
+        } else {
+            sortie.push(o[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&sortie).into_owned()
 }
 
 /// Une adresse en trois morceaux, l'hote etant celui qui repond vraiment.
@@ -176,6 +278,10 @@ pub struct Adresse {
     /// signes hors ASCII, ou un `utilisateur@` devant l'hote. L'adresse se
     /// montre alors en forme brute.
     pub trompeuse: bool,
+    /// Ce qui precede l'arobase de l'autorite (`apple.com` dans
+    /// `https://apple.com@evil.example/`) : ce que l'adresse affiche pour tromper,
+    /// et que l'ecran doit montrer plutot que cacher.
+    pub info: String,
 }
 
 impl Adresse {
@@ -194,7 +300,7 @@ pub fn adresse(url: &str) -> Adresse {
     // et ce qu'il porte (parfois une adresse https) n'en est pas un.
     if let Some((schema, reste)) = url.split_once(':') {
         if !reste.starts_with("//") && !schema.is_empty() && schema.chars().all(|c| c.is_ascii_alphabetic()) {
-            return Adresse { schema: schema.to_ascii_lowercase(), hote: String::new(), chemin: reste.to_string(), trompeuse: false };
+            return Adresse { schema: schema.to_ascii_lowercase(), hote: String::new(), chemin: reste.to_string(), trompeuse: false, info: String::new() };
         }
     }
     let (schema, reste) = url.split_once("://").unwrap_or(("", url));
@@ -209,6 +315,7 @@ pub fn adresse(url: &str) -> Adresse {
         hote,
         chemin: if chemin.is_empty() { "/".to_string() } else { chemin.to_string() },
         trompeuse,
+        info: info.to_string(),
     }
 }
 
@@ -386,6 +493,8 @@ pub enum Reseau {
     Fichier,
     Redirection,
     Introuvable,
+    /// Le serveur repond 503.
+    Serveur,
 }
 
 impl Reseau {
@@ -400,6 +509,7 @@ impl Reseau {
             "fichier" => Reseau::Fichier,
             "redirection" => Reseau::Redirection,
             "introuvable" => Reseau::Introuvable,
+            "503" => Reseau::Serveur,
             _ => return None,
         })
     }
@@ -568,6 +678,7 @@ pub fn resoudre(url: &str, pages: &HashMap<String, Page>, force: Option<Reseau>,
         Some(Reseau::Absente) => return Etat::Echec(Echec::Absente),
         Some(Reseau::Certificat) => return Etat::Echec(Echec::Certificat),
         Some(Reseau::Delai) => return Etat::Echec(Echec::Delai),
+        Some(Reseau::Serveur) => return Etat::Echec(Echec::Serveur(503)),
         Some(Reseau::HorsLigne) => return Etat::HorsLigne,
         Some(Reseau::Connexion) => return Etat::Connexion,
         Some(Reseau::Fichier) => return Etat::Fichier,
@@ -607,6 +718,39 @@ mod essais {
         assert_eq!(urls("http://a.org, https://b.org;"), ["http://a.org", "https://b.org"]);
     }
 
+    /// Objection C1 de la correction : la parole montrait `[titre](adresse)` en
+    /// entier. Le titre seul s'affiche ; le lien tient l'adresse de la donnee.
+    #[test]
+    fn un_geste_est_un_lien_quand_sa_ligne_l_est() {
+        assert!(geste_a_un_lien("WebFetch", "https://docs.rs/x/y"));
+        assert!(!geste_a_un_lien("WebFetch", "https://api.example.com/{id}"));
+        assert!(geste_a_un_lien("Bash", "curl -s https://crates.io/api/v1/crates/wry"));
+        assert!(!geste_a_un_lien("Bash", "ls -la"));
+        assert!(!geste_a_un_lien("Read", "C:/x/y.rs"));
+    }
+
+    #[test]
+    fn un_lien_markdown_s_affiche_par_son_titre_et_garde_son_adresse() {
+        let (a, l) = afficher_liens("Voir [Glottopedia](https://glottopedia.org/x) puis https://b.example/y. Fin");
+        assert_eq!(a, "Voir Glottopedia puis https://b.example/y. Fin");
+        assert_eq!(l.len(), 2);
+        assert_eq!((&a[l[0].debut..l[0].fin], l[0].url.as_str()), ("Glottopedia", "https://glottopedia.org/x"));
+        assert_eq!((&a[l[1].debut..l[1].fin], l[1].url.as_str()), ("https://b.example/y", "https://b.example/y"));
+        // Le titre peut mentir sur l'adresse : c'est la donnee qui commande.
+        let (a, l) = afficher_liens("[apple.com](https://evil.example/)");
+        assert_eq!((a.as_str(), l[0].url.as_str()), ("apple.com", "https://evil.example/"));
+        // Un titre vide ne cache pas l'adresse.
+        let (a, l) = afficher_liens("[](https://x.example/p)");
+        assert_eq!((a.as_str(), l[0].url.as_str()), ("https://x.example/p", "https://x.example/p"));
+        // Deux liens a la suite, des accents avant : les plages restent sur des frontieres de signes.
+        let (a, l) = afficher_liens("é [é](https://a.example/) à [ü](https://b.example/)");
+        assert_eq!(a, "é é à ü");
+        assert_eq!((&a[l[0].debut..l[0].fin], &a[l[1].debut..l[1].fin]), ("é", "ü"));
+        // Rien a lier : le texte passe tel quel.
+        let (a, l) = afficher_liens("a [b] (c) d");
+        assert_eq!((a.as_str(), l.len()), ("a [b] (c) d", 0));
+    }
+
     #[test]
     fn un_lien_markdown_est_un_seul_lien_du_crochet_a_la_parenthese() {
         let t = "Sources: [Glottopedia — Maxim](http://www.g.org/i.php/Maxim) et la suite";
@@ -641,6 +785,25 @@ mod essais {
         assert_eq!(classer("ftp://x.org/a"), Classe::Refuse("ftp".into()));
     }
 
+    /// Les ecritures du local que le moteur lit comme l'ordinateur ou le reseau
+    /// prive, et que `classer` laissait passer en `NonChiffre`.
+    #[test]
+    fn les_ecritures_detournees_du_local_sont_locales() {
+        for u in [
+            "http://localhost./", "http://LOCALHOST.:3000/", "http://a.localhost/", "http://2130706433/", "http://0x7f.0.0.1/", "http://0177.0.0.1/",
+            "http://127.1/", "http://0x7f000001/", "http://[::1]/", "http://[::ffff:127.0.0.1]/", "http://[::ffff:7f00:1]/", "http://[0:0:0:0:0:0:0:1]/",
+            "http://10.0.0.1/", "http://192.168.1.1/", "http://172.16.0.1/", "http://169.254.169.254/", "http://100.64.0.1/", "http://127.0.0.1./",
+            "http://%31%32%37.0.0.1/", "http://127\u{3002}0\u{3002}0\u{3002}1/", "http://\u{ff11}\u{ff12}\u{ff17}.0.0.1/", "http://127.0.0.1\t:8080/", "https://[fe80::1]/",
+            "http://0/", "http://a@127.0.0.1/",
+        ] {
+            assert_eq!(classer(u), Classe::Local, "{u:?}");
+        }
+        // Ce qui y ressemble sans l'etre reste ouvrable.
+        for u in ["http://127.evil.example/", "http://10.example.com/", "http://8.8.8.8/", "http://127.0.0.1@evil.example/", "http://2130706433.evil.example/", "http://256.1.1.1/", "http://1.2.3.4.5/"] {
+            assert_ne!(classer(u), Classe::Local, "{u:?}");
+        }
+    }
+
     #[test]
     fn l_hote_est_celui_qui_repond() {
         let a = adresse("https://docs.expo.dev/versions/latest/sdk/gl-view/#x");
@@ -649,6 +812,9 @@ mod essais {
         let b = adresse("https://apple.com@evil.example/login");
         assert_eq!(b.hote, "evil.example");
         assert!(b.trompeuse);
+        // Ce qui precede l'arobase est gardee : l'ecran le montre au lieu de le taire.
+        assert_eq!(b.info, "apple.com");
+        assert_eq!(adresse("https://docs.expo.dev/").info, "");
         assert!(adresse("https://xn--pple-43d.com/").trompeuse);
         assert!(adresse("https://аpple.com/").trompeuse);
         assert_eq!(adresse("http://localhost:3000").hote, "localhost:3000");
@@ -691,6 +857,34 @@ mod essais {
         assert!(x.coupe_avant && x.coupe_apres);
         assert!(x.avant.chars().count() <= CONTEXTE && x.apres.chars().count() <= CONTEXTE);
         assert!(!x.avant.starts_with("ot") && x.avant.starts_with("mot"));
+    }
+
+    /// Les bornes que les sabotages du juge technique laissaient intactes (T9).
+    #[test]
+    fn les_bornes_du_classement_et_de_la_recherche_sont_tenues() {
+        // `[::1]` est local, `[::2]` ne l'est pas : l'ecriture IPv6 est jugee, pas comparee.
+        assert_eq!(classer("http://[::1]:3000/"), Classe::Local);
+        assert_eq!(classer("http://[::2]:3000/"), Classe::NonChiffre);
+        // Deux arobases : l'hote est ce qui suit le dernier.
+        let a = adresse("http://a@b@127.0.0.1/x");
+        assert_eq!((a.hote.as_str(), a.info.as_str()), ("127.0.0.1", "a@b"));
+        assert_eq!(classer("http://a@b@127.0.0.1/x"), Classe::Local);
+        // L'apostrophe typographique, le cas courant du texte d'un agent, se retrouve.
+        let x = extraire(PAGE, "Le deuxième paragraphe parle d’autre chose et d’un tiers").unwrap();
+        assert_eq!(x.trouve, Trouve::Complet);
+        // Huit mots dont les huit premiers sont dans la page, le neuvieme non : debut seul.
+        let neuf = extraire(PAGE, "Le seuil de Unity Personal est de 200 000 jamais ecrit").unwrap();
+        assert_eq!(neuf.trouve, Trouve::Debut);
+        // Sept mots dont le dernier est faux : jamais devine. (Le seuil de huit mots
+        // ne se distingue pas d'un seuil plus bas : sous huit mots, la citation entiere
+        // est son propre debut ; ~~ce sabotage tient debout~~ c'est un mutant equivalent.)
+        assert!(extraire(PAGE, "Le seuil de Unity Personal est faux").is_none());
+        // Un gabarit d'adresse n'est pas une destination.
+        assert_eq!(resoudre("https://x.dev/{id}", &pages(), None, false), Etat::Refuse("gabarit".into()));
+        // La coupe tombe au milieu d'un mot : elle recule jusqu'a l'espace, et le dit.
+        assert_eq!(garder_debut("aaaa bbbbbbbb cc", 8), ("aaaa".to_string(), true));
+        assert_eq!(garder_fin("aaaa bbbbbbbb cc", 8), ("cc".to_string(), true));
+        assert_eq!(garder_debut("aaaa bbbb", 4), ("aaaa".to_string(), true));
     }
 
     #[test]

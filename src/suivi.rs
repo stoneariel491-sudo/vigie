@@ -151,7 +151,7 @@ pub fn legende_courte(img: &Image) -> String {
 
 /// La parole sans le balisage qui s'y lirait en clair : les dieses d'un
 /// titre, les accents graves d'un chemin, les doubles asterisques d'une
-/// emphase. Une asterisque seule reste : elle
+/// emphase (cadre du tour 00, constat 5). Une asterisque seule reste : elle
 /// est un produit dans `a * b` aussi souvent qu'une emphase.
 pub fn sans_balisage(t: &str) -> String {
     t.lines()
@@ -1071,6 +1071,19 @@ mod essais {
     }
 
     #[test]
+    fn une_citation_de_huit_mots_compte_et_une_de_sept_non() {
+        assert_eq!(citations("il dit \"un deux trois quatre cinq six sept huit\" fin"), ["un deux trois quatre cinq six sept huit"]);
+        assert!(citations("il dit \"un deux trois quatre cinq six sept\" fin").is_empty());
+    }
+
+    #[test]
+    fn une_reponse_ne_garde_que_huit_citations() {
+        let t: String = (0..12).map(|i| format!("phrase \"citation numero {i} de huit mots au moins ici\" ")).collect();
+        assert_eq!(citations(&t).len(), 8);
+        assert_eq!(citations(&t)[7], "citation numero 7 de huit mots au moins ici");
+    }
+
+    #[test]
     fn un_webfetch_garde_son_invite_et_apprend_sa_citation_au_resultat() {
         let mut l = Lecteur::nouveau((1280, 2048));
         let entree = |ts: &str, c: serde_json::Value| serde_json::json!({"type": "assistant", "timestamp": ts, "message": {"content": [c]}});
@@ -1229,7 +1242,7 @@ pub fn lancer(envoi: Sender<Nouvelle>, choix: Receiver<(u64, Choix)>, premier: C
 
 #[cfg(test)]
 mod essais_balisage {
-    /// Les deux formes relevees dans de vrais fils, et un texte sans balisage, rendu
+    /// Les deux formes relevees par le cadre, et un texte sans balisage, rendu
     /// tel quel.
     #[test]
     fn la_parole_perd_son_balisage() {

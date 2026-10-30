@@ -8,7 +8,7 @@ license = "MIT"
 [dependencies]
 # Les quatre versions sont accordees entre elles : glyphon 0.12 impose wgpu 30
 # et cosmic-text 0.19, et winit 0.30 est celle contre laquelle il est teste.
-# C'est exactement la pile eprouvee dans veilleuse (son ARCHITECTURE.md, §0).
+# C'est exactement la pile eprouvee dans vitrine (ARCHITECTURE.md §0).
 winit = "0.30"
 wgpu = "=30.0.1"
 glyphon = "0.12"
@@ -32,7 +32,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 # TLS par rustls ; ni compression, ni cookies, ni mandataire pris dans
 # l'environnement.
 # La page, au second geste seulement : WebView2 par wry, dans une fenetre enfant
-# de la fenetre winit.
+# de la fenetre winit (essai de design/navigateur/tour-01/essai).
 wry = "0.57"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 
@@ -42,7 +42,13 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_HiDpi",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
 ] }
+# Les gardiens des cadres et des ressources, et l'historique, sont des appels
+# du moteur que wry ne rend pas : ses propres dependances, aux memes versions
+# que celles de wry 0.57 (Cargo.lock ne bouge pas), nommees ici pour les appeler.
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_System_Com"] }
 
 [profile.release]
 opt-level = 2

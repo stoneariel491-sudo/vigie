@@ -14,6 +14,21 @@ measurement that contradicts what it expected, the exact moment it corrects itse
 reads the agents' session transcripts as they are written (`%USERPROFILE%\.claude\projects`,
 one JSON object per line) and lays them out as something you can actually read.
 
+![Vigie opening screen](docs/ouverture.jpg)
+
+*The opening screen: a 4K painting rendered by code.*
+
+## Screenshots
+
+Invented demo data (a fictional project called "orbite"), reproducible with
+[`demo/generer.py`](demo/generer.py): no real session appears in these images.
+
+![Live view: one agent, its steps, its reasoning and the image it just read](docs/capture-1.png)
+
+![A run: its agents on a shared time axis, what each concluded, and the images it produced](docs/capture-2.png)
+
+![The runs of a project](docs/capture-3.png)
+
 ## What it does
 
 - **Follows the live agent by itself.** Nothing to configure: Vigie picks the most recent run,
@@ -35,10 +50,28 @@ one JSON object per line) and lays them out as something you can actually read.
   (`ureq` + rustls, no cookies, no scripts). Private and local addresses are refused *at DNS
   resolution time*, through a custom resolver, so a name that changes its answer between check
   and use (DNS rebinding) does not get through.
+- **Zoomable images, audio waveforms and links.** Images zoom like on a Mac; sounds play with
+  their waveform; a cited page opens in an isolated engine with the quoted passage highlighted.
 - **Behaves like an installed app.** Single instance (a named mutex; a second launch brings
   the first window forward), remembers its size, position, zoom and current view, keeps a
   catalogue on disk so the next launch is immediate, light and dark themes (`T`), full
   keyboard navigation, user-level install with a Start menu entry and an uninstaller.
+
+## Download
+
+A prebuilt, unsigned `Vigie-windows.zip` is in the [Releases](../../releases) (Windows may show a
+SmartScreen warning). To try it without your own transcripts:
+`python demo/generer.py`, then `$env:VIGIE_DONNEES="demo\donnees"; cargo run --release`.
+
+## Privacy
+
+Transcripts can contain keys, paths or private data. Vigie **reads them only on your machine**
+(`.claude\projects`) and sends nothing anywhere: no account, no telemetry, no server. It keeps
+its own state (size, position, zoom) in `%APPDATA%\Vigie`. The only network access is a **click
+on a link**: one GET without cookies or scripts to the address you clicked; if you open the page,
+it loads in an isolated engine whose whole traffic goes through a local proxy that refuses
+private addresses. `src/reseau.rs`, `src/mandataire.rs` and `src/navigateur.rs` are the only
+modules that touch the network.
 
 ## Run it
 

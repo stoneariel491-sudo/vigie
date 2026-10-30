@@ -233,12 +233,25 @@ impl Images {
         ecran: (f32, f32),
         liste: &[(&Texture, [f32; 4], f32)],
     ) {
+        let pleines: Vec<_> = liste.iter().map(|(t, b, r)| (*t, *b, *r, 1.0)).collect();
+        self.dessiner_avec_opacite(peripherique, passe, ecran, &pleines);
+    }
+
+    /// La meme, avec l'opacite de chaque image : l'ecran d'ouverture s'efface
+    /// par la.
+    pub fn dessiner_avec_opacite(
+        &self,
+        peripherique: &wgpu::Device,
+        passe: &mut wgpu::RenderPass<'_>,
+        ecran: (f32, f32),
+        liste: &[(&Texture, [f32; 4], f32, f32)],
+    ) {
         if liste.is_empty() {
             return;
         }
         passe.set_pipeline(&self.tuyau);
-        for (texture, boite, rayon) in liste {
-            let cadre = [[ecran.0, ecran.1, 0.0, 0.0], *boite, [*rayon, 0.0, 0.0, 0.0]];
+        for (texture, boite, rayon, opacite) in liste {
+            let cadre = [[ecran.0, ecran.1, 0.0, 0.0], *boite, [*rayon, opacite.clamp(0.0, 1.0), 0.0, 0.0]];
             let uniforme = peripherique.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("cadre"),
                 contents: octets(&cadre),

@@ -43,7 +43,7 @@ const POINT: f32 = 5.0;
 const AVANT_POINT: f32 = 6.0;
 /// La barre laterale (tour 00, l'emprunt a la direction materiau). Sa largeur
 /// est fixe, sans proportion qui la ferait varier avec la fenetre. Elle est
-/// tranchee par la planche et le calcul de la mise en page : a la moitie
+/// tranchee par la planche (passage-b/artisan/cout_barre.py) : a la moitie
 /// d'ecran, 188 points ne laissaient que 2 vignettes de front contre 4 barre
 /// masquee ; a 180,4 points au plus il en tient 3. A 176, le nom d'un projet garde
 /// 129 points, une vingtaine de signes : « dossier personnel » y tient.
@@ -146,7 +146,7 @@ pub struct Chrono {
     /// La demi-hauteur du trait d'une graduation autour de chaque barre. Le
     /// trait ne court plus de l'axe a la derniere barre : il traversait les
     /// noms et les bilans, et sous le contraste eleve, devenu noir, il barrait
-    /// « C:/Us|ers ». Il ne se pose que dans la bande de
+    /// « C:/Us|ers » (juge-design.md, m1). Il ne se pose que dans la bande de
     /// la barre, ou il n'y a pas de texte.
     pub demi_trame: f32,
 }
@@ -312,10 +312,10 @@ fn barlow() -> Attrs<'static> {
 }
 
 /// Les chemins longs d'un texte ramenes a leurs deux derniers elements :
-/// « C:/Users/moi/dev/active/projet/recherche/design/forme.md » devient
+/// « C:/Users/alex/dev/active/atelier-d/recherche/design/forme.md » devient
 /// « …/design/forme.md ». Ce qui distingue un chemin d'un autre est sa fin ;
-/// son debut est commun a tout un chantier (six bilans sur sept coupes avant
-/// le nom du fichier).
+/// son debut est commun a tout un chantier (juge-design.md, M4 : six bilans
+/// sur sept coupes avant le nom du fichier).
 pub fn abreger_chemins(texte: &str) -> String {
     texte
         .split(' ')
@@ -992,7 +992,7 @@ pub fn dessiner_barre<'a>(
     // filet d'un pixel le separe du contenu : pas de surface de plus. Rappelee
     // par-dessus le contenu voile d'une fenetre etroite, son bord prend
     // l'encre des reperes : au sombre, le filet seul (1,52:1) etait tout ce qui
-    // separait les deux plans.
+    // separait les deux plans (juge-design.md, m9).
     let trait_ = (1.0 * e).max(1.0).round();
     let bord = if par_dessus { palette::encre3() } else { palette::filet() };
     aplats.push(forme(p, palette::lineaire(palette::fond_octets(), 1.0), 0.0));
@@ -1150,7 +1150,7 @@ pub fn dessiner_liste<'a>(
             if let Some(b) = rogner(plaque, g.haut, g.bas) {
                 // Venue du clavier, la ligne porte aussi un anneau d'encre-2 :
                 // la plaque seule fait 1,52:1 sur le fond, sous les 3:1 qu'un
-                // etat demande. Sous la souris,
+                // etat demande (systeme.md §4, regle 4, et §7). Sous la souris,
                 // la plaque suffit : la main est deja dessus.
                 if clavier {
                     let t = (1.5 * e).max(1.0).round();
@@ -1338,11 +1338,11 @@ mod essais_coupe {
     #[test]
     fn un_chemin_garde_sa_fin() {
         assert_eq!(
-            abreger_chemins("Fichier produit : C:/Users/moi/dev/active/cours-llm/recherche/design/forme.md, commité"),
+            abreger_chemins("Fichier produit : C:/Users/alex/dev/active/atelier-d/recherche/design/forme.md, commité"),
             "Fichier produit : …/design/forme.md, commité"
         );
         assert_eq!(
-            abreger_chemins("cd /c/Users/moi/dev/active/cours-llm/recherche/design/essais && ffmpeg"),
+            abreger_chemins("cd /c/Users/alex/dev/active/atelier-d/recherche/design/essais && ffmpeg"),
             "cd …/design/essais && ffmpeg"
         );
         assert_eq!(abreger_chemins("« recherche/forme.md » https://a.b/c/d/e/f"), "« recherche/forme.md » https://a.b/c/d/e/f");

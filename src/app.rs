@@ -31,7 +31,7 @@ pub fn figee() -> Option<PathBuf> {
 /// cet instant : l'etat d'un chantier (« en cours » trente minutes apres sa
 /// derniere ecriture) et les titres de jour (« Aujourd'hui ») dependent de
 /// l'heure, et deux rendus d'une copie figee faits a une heure d'ecart, ou un
-/// autre jour, ne montraient plus le meme ecran.
+/// autre jour, ne montraient plus le meme ecran (cadre du tour 00, §8.2).
 pub fn maintenant() -> std::time::SystemTime {
     match std::env::var("VIGIE_MAINTENANT").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
         Some(s) => std::time::UNIX_EPOCH + std::time::Duration::from_secs(s),
@@ -226,7 +226,7 @@ mod essais {
     fn un_souvenir_se_relit_tel_quel() {
         for (vue, choix) in [
             (Vue::Direct, Choix::Direct),
-            (Vue::Liste("cours-llm".into()), Choix::Chantier("wf_a".into())),
+            (Vue::Liste("atelier-d".into()), Choix::Chantier("wf_a".into())),
             (Vue::Chantier("wf_b".into()), Choix::Direct),
             (Vue::Suivi("wf_c".into()), Choix::Agent { chantier: "wf_c".into(), agent: "a1".into() }),
         ] {

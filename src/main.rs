@@ -31,7 +31,9 @@ mod medias;
 mod palette;
 mod passage;
 mod feuille;
+mod mandataire;
 mod navigateur;
+mod ouverture;
 mod reseau;
 mod plan;
 mod ressort;
@@ -73,9 +75,9 @@ const INTERLIGNE: f32 = 23.0;
 const COLONNE_MAX: f32 = 760.0;
 /// La mesure de ce qui se lit en continu : la parole, la pensee. 45 a 75
 /// signes par ligne (Bringhurst, §2.1.2) ; Barlow avance de 0,4123 a 0,4208 em
-/// par signe, et 464 points font 75 signes de 15 points au
+/// par signe (systeme.md §2), et 464 points font 75 signes de 15 points au
 /// plus. Les 760 points de la colonne en faisaient 120, et masquer la barre
-/// portait la parole de 59 a 89 signes en moitie d'ecran :
+/// portait la parole de 59 a 89 signes en moitie d'ecran (juge-design.md, M3) :
 /// la place que la barre rend va aux gestes et aux images, pas a la ligne.
 const MESURE: f32 = 464.0;
 /// Le bloc large : la bande, l'en-tete, les listes et la page d'un chantier.
@@ -256,7 +258,7 @@ struct ImagePosee {
     largeur: f32,
     hauteur: f32,
     /// Ce qui dit que deux images sont la meme : un `cp` la refait sous un
-    /// autre nom, et le fil la montrait deux fois.
+    /// autre nom, et le fil la montrait deux fois (cadre, constat 7).
     empreinte: u64,
     /// Creee a la premiere apparition a l'ecran, a la taille exacte
     /// d'affichage, et refaite si cette taille change.
@@ -270,6 +272,9 @@ struct PassageOuvert {
     vue: feuille::Vue,
     depuis: Instant,
     local_confirme: bool,
+    /// Ce que la page vivante a repondu la derniere fois (`Trouve` ou `NonRetrouve`),
+    /// gardee quand la page se referme : l'extrait la dit.
+    verdict: navigateur::Sonde,
     /// Elle se referme : le ressort revient a 0, puis elle disparait.
     ferme: bool,
     /// La page lue au clic (le reseau), quand il y en a une ; les captures
@@ -379,7 +384,7 @@ struct Vigie {
     /// « Projets », le titre du groupe de la barre, pose une fois par echelle.
     groupe_projets: Option<Buffer>,
     /// Ce que fait le bouton de la barre, dit a son survol avec sa touche :
-    /// `Ctrl` + `B` ne s'ecrivait que dans le LISEZ-MOI.
+    /// `Ctrl` + `B` ne s'ecrivait que dans le LISEZ-MOI (juge-design.md, m2).
     /// La cle est l'etat de la barre que le texte decrit.
     bulle: Option<(bool, Buffer, f32)>,
     /// Le contraste eleve de Windows, ou --contraste-eleve.
@@ -397,6 +402,14 @@ struct Vigie {
 
     /// L'image ou la video ouverte en grand, par-dessus le reste.
     visionneuse: Option<visionneuse::Visionneuse>,
+    /// L'ecran d'ouverture, tant qu'il est la (ouverture.rs), sa texture, sa
+    /// taille et la toile en train de se decoder dans un fil a part.
+    ouverture: Option<ouverture::Ouverture>,
+    ouverture_texture: Option<images::Texture>,
+    ouverture_taille: (u32, u32),
+    ouverture_recue: Option<std::sync::mpsc::Receiver<ouverture::Decodee>>,
+    /// Le catalogue est arrive une premiere fois : la vigie sait quoi montrer.
+    donnees_pretes: bool,
     /// Sa texture, et ce qu'elle montre : le rang et la source (0 la
     /// vignette, 1 l'image pleine, 2 la video).
     vis_texture: Option<(usize, u8, images::Texture)>,
@@ -423,6 +436,12 @@ struct Vigie {
     lire_envoi: std::sync::mpsc::Sender<ArriveeLecture>,
     lire_recois: Receiver<ArriveeLecture>,
     lire_jeton: u64,
+    /// --sonde=trouve|non|indisponible : ce que la page ouverte aurait repondu,
+    /// force pour une capture (aucun moteur de page n'y tourne).
+    sonde_forcee: Option<navigateur::Sonde>,
+    /// --citation=texte : la citation d'un lien ouvert par --adresse, qu'aucune
+    /// transcription ne porte (une page de contrôle locale, par exemple).
+    citation_forcee: Option<String>,
     /// La page, tant qu'elle est ouverte. Jamais pendant une capture.
     navigateur: Option<navigateur::Navigateur>,
     page_permise: bool,
@@ -448,7 +467,7 @@ struct Vigie {
     /// Le fil a fini de lire ce que le fichier contenait a l'ouverture
     /// (suivi::Nouvelle::Lu). Une seconde sans bloc ne le prouvait pas : sur
     /// une machine chargee, la capture partait sur un fil a moitie lu et
-    /// `--defiler` butait sur son debut.
+    /// `--defiler` butait sur son debut (juge-technique.md, §4).
     fil_lu: bool,
     /// Le haut voulu du fil apres un clic sur une vignette, tant qu'on n'a
     /// pas defile soi-meme.
@@ -465,6 +484,8 @@ struct Demarrage {
     ctrl: bool,
     /// Majuscule enfoncee : Ctrl + Maj + Tab recule d'un onglet.
     maj: bool,
+    /// Alt enfonce : Alt + fleche recule ou avance dans la page ouverte.
+    alt: bool,
     /// Une entree a change ce qui se voit : la trame suivante le dessine.
     redessiner: bool,
     /// --essai : pose un bloc de signes connus, pour prouver que le recours de
@@ -531,9 +552,14 @@ struct Demarrage {
     /// page permis : de quoi voir une vraie page dans une fenetre a soi.
     reel: Option<f32>,
     reel_debut: Option<Instant>,
+    /// --ouvrir-page : avec --reel, le second geste se fait des que la lecture est arrivee.
+    ouvrir_page: bool,
     /// --loupe=z[,x,y] : avec --ouvrir, zoome l'image ouverte de z, autour du
     /// point (x, y) de la fenetre ou de son centre, comme la molette.
     loupe: Option<(f32, Option<(f32, f32)>)>,
+    /// --ouverture=o : une capture montre l'ecran d'ouverture, a l'opacite o
+    /// (0 a 1). Sans lui, une capture n'en montre pas.
+    ouverture_capture: Option<f32>,
     /// --clic-vis=x,y : avec --ouvrir, un clic dans la visionneuse ouverte,
     /// par la meme fonction que la souris (le saut sur l'onde d'un son, par
     /// exemple). --clic, lui, tombe avant son ouverture.
@@ -718,7 +744,7 @@ impl Vigie {
                 &detail,
                 texte_l,
             );
-            let heure = self.poser_heure(&bloc.heure);
+            let heure = self.poser_heure(&bloc.heure, GESTE_H);
             let empreinte = img.empreinte();
             return Pose {
                 bloc,
@@ -735,7 +761,9 @@ impl Vigie {
         // Un geste : une ligne, le verbe dans sa colonne, le detail coupe
         // d'une ellipse a la largeur qui reste.
         if matches!(bloc.registre, Registre::Geste | Registre::Image) {
-            let gm = Metrics::new(GESTE_CORPS * e, GESTE_H * e);
+            // Une ligne qui est elle-meme un lien fait 24 pt : elle se vise en entier.
+            let h_ligne = plan::hauteur_de_ligne(GESTE_H, bloc.registre == Registre::Geste && passage::geste_a_un_lien(&bloc.outil, &bloc.corps));
+            let gm = Metrics::new(GESTE_CORPS * e, h_ligne * e);
             let verbe = if bloc.registre == Registre::Image { "Image" } else { bloc.outil.as_str() };
             let (verbe_b, _) = vues::une_ligne(
                 &mut self.systeme,
@@ -756,9 +784,9 @@ impl Vigie {
                 &detail,
                 (m.colonne - VERBE_L * e).max(40.0 * e),
             );
-            let heure = self.poser_heure(&bloc.heure);
+            let heure = self.poser_heure(&bloc.heure, h_ligne);
             let liens = liens_du_geste(&bloc, &corps_b);
-            return Pose { bloc, corps: corps_b, second: Some(verbe_b), heure, hauteur: GESTE_H * e, y: 0.0, image: None, liens };
+            return Pose { bloc, corps: corps_b, second: Some(verbe_b), heure, hauteur: h_ligne * e, y: 0.0, image: None, liens };
         }
 
         let texte = match bloc.registre {
@@ -766,25 +794,26 @@ impl Vigie {
             Registre::Parole => suivi::sans_balisage(&bloc.corps),
             _ => bloc.corps.clone(),
         };
+        // Un lien Markdown s'affiche par son titre ; l'adresse reste dans le lien.
+        let (texte, liens_texte) = match bloc.registre {
+            Registre::Parole | Registre::Pensee => passage::afficher_liens(&texte),
+            _ => (texte, Vec::new()),
+        };
         corps.set_text(&texte, &attrs(bloc.registre), Shaping::Advanced, None);
         corps.shape_until_scroll(&mut self.systeme, false);
         let lignes = corps.layout_runs().count().max(1) as f32;
         let hauteur = lignes * m.interligne;
 
-        let heure = self.poser_heure(&bloc.heure);
-        let liens = match bloc.registre {
-            Registre::Parole | Registre::Pensee => passage::liens(&texte)
-                .into_iter()
-                .filter(|l| passage::classer(&l.url) != passage::Classe::Gabarit)
-                .map(|l| {
-                    let boites = feuille::boites(&corps, &texte, l.debut, l.fin);
-                    let (a, b) = l.libelle.unwrap_or((l.debut, l.fin));
-                    LienPose { soulignees: feuille::boites(&corps, &texte, a, b), boites, url: l.url, rangee: false }
-                })
-                .filter(|l| !l.boites.is_empty())
-                .collect(),
-            _ => Vec::new(),
-        };
+        let heure = self.poser_heure(&bloc.heure, GESTE_H);
+        let liens: Vec<LienPose> = liens_texte
+            .into_iter()
+            .filter(|l| passage::classer(&l.url) != passage::Classe::Gabarit)
+            .map(|l| {
+                let boites = feuille::boites(&corps, &texte, l.debut, l.fin);
+                LienPose { soulignees: boites.clone(), boites, url: l.url, rangee: false }
+            })
+            .filter(|l| !l.boites.is_empty())
+            .collect();
         Pose {
             bloc,
             corps,
@@ -799,11 +828,11 @@ impl Vigie {
 
     /// L'heure vit dans sa propre gouttiere : deux couleurs demandent deux
     /// zones, et cela donne en prime une colonne d'heures alignee.
-    fn poser_heure(&mut self, heure: &str) -> Option<Buffer> {
+    fn poser_heure(&mut self, heure: &str, h_ligne: f32) -> Option<Buffer> {
         if heure.is_empty() {
             return None;
         }
-        let mut h = Buffer::new(&mut self.systeme, Metrics::new(GESTE_CORPS * self.echelle, GESTE_H * self.echelle));
+        let mut h = Buffer::new(&mut self.systeme, Metrics::new(GESTE_CORPS * self.echelle, h_ligne * self.echelle));
         h.set_size(Some(GOUTTIERE * self.echelle), None);
         h.set_text(heure, &Attrs::new().family(Family::Name("Barlow")), Shaping::Advanced, None);
         h.shape_until_scroll(&mut self.systeme, false);
@@ -936,7 +965,7 @@ impl Vigie {
         }
     }
 
-    /// « design-de-l-application  ·  mon-projet », ou l'on est, puis « 372
+    /// « design-de-l-application  ·  atelier-d », ou l'on est, puis « 372
     /// gestes, 13 messages, 29 images », ce que le fil contient, compte sur
     /// les blocs recus.
     fn libelle_fil(&self) -> (String, String) {
@@ -964,9 +993,9 @@ impl Vigie {
         (lieu, parties.join("  ·  "))
     }
 
-    /// « 7 agents · 29 images · lancé aujourd'hui à 09:49 · mon-projet ».
+    /// « 7 agents · 29 images · lancé aujourd'hui à 09:49 · atelier-d ».
     /// Pendant la premiere lecture, aucun compte partiel n'est montre comme
-    /// un vrai : « lecture des agents, 3 sur 7 ».
+    /// un vrai : « lecture des agents, 3 sur 7 » (cadre, C8).
     fn resume_chantier(&self, id: &str) -> String {
         let mut parties: Vec<String> = Vec::new();
         let c = self.catalogue.chantier(id);
@@ -1046,7 +1075,7 @@ impl Vigie {
 
         // Le lieu d'un fil, le chantier et son projet, au corps du titre : a
         // 13 points, il ne se lisait pas sur une capture reduite au quart, le
-        // seuil du coup d'oeil, ou le titre en
+        // seuil du coup d'oeil (cadre, C6 ; epreuve, tache 4), ou le titre en
         // 20 se lisait de justesse. Le titre le domine par sa graisse et son
         // encre. Les comptes qui suivent gardent le corps des reperes : ils ne
         // se lisent pas de loin.
@@ -1102,6 +1131,7 @@ impl Vigie {
                 Nouvelle::Depart(_) => {}
                 Nouvelle::Lu => self.fil_lu = true,
                 Nouvelle::Catalogue(c) => {
+                    self.donnees_pretes = true;
                     self.catalogue = c;
                     self.catalogue_change();
                     change = true;
@@ -1141,7 +1171,7 @@ impl Vigie {
         for _ in 0..BLOCS_PAR_TRAME {
             let Some(mut b) = self.en_attente.pop_front() else { break };
             // Le nom de l'agent en tete d'un fil vide redisait le titre de
-            // l'en-tete, juste au-dessus. Il ne se montre
+            // l'en-tete, juste au-dessus (juge-design.md, m10). Il ne se montre
             // que quand le direct passe d'un agent a un autre.
             if b.registre == Registre::Releve && self.poses.is_empty() {
                 continue;
@@ -1306,7 +1336,7 @@ impl Vigie {
     /// Le catalogue a change : les onglets, la liste et l'en-tete se refont
     /// s'ils le doivent, et seulement alors.
     fn catalogue_change(&mut self) {
-        // --onglet=Projet doit trouver projet : la casse d'un nom tape a la
+        // --onglet=Atelier-e doit trouver atelier-e : la casse d'un nom tape a la
         // main n'est pas une raison de montrer un projet inconnu.
         if let Vue::Liste(p) = &self.vue {
             if let Some(q) = self.catalogue.projets().into_iter().find(|q| q.eq_ignore_ascii_case(p) && q != p) {
@@ -1317,7 +1347,8 @@ impl Vigie {
             self.montrer_onglet_actif();
         }
         // « Projets » dit qu'il lit tant que le premier parcours n'est pas
-        // fini : la barre se remplissait sous les yeux sans le dire.
+        // fini : la barre se remplissait sous les yeux sans le dire
+        // (juge-design.md, m6).
         self.groupe_projets = None;
         self.poser_liste();
         self.poser_entete();
@@ -1730,7 +1761,7 @@ impl Vigie {
         }
         // Rappelee dans une fenetre etroite, elle a servi : elle part, que le
         // projet vienne d'un clic ou d'une touche. Ctrl + 2 la laissait sur la
-        // liste, voilee.
+        // liste, voilee (epreuve.md, tache 1).
         if self.barre_etroite() && self.barre_rappelee {
             self.barre_rappelee = false;
             self.viser_barre();
@@ -1822,6 +1853,7 @@ impl Vigie {
             vue: feuille::Vue::Passage,
             depuis: Instant::now(),
             local_confirme: false,
+            verdict: navigateur::Sonde::Attente,
             ferme: false,
             page: None,
             jeton: 0,
@@ -1879,7 +1911,9 @@ impl Vigie {
             if p.jeton != a.jeton || p.url != a.url || p.ferme {
                 continue;
             }
-            let lecture = self.lectures.get(&a.url).and_then(|c| c.lock().ok().map(|l| l.clone()));
+            let lecture = self.lectures.get(&a.url).and_then(|c| c.lock().ok().map(|l| l.clone())).or_else(|| {
+                self.citation_forcee.clone().map(|c| suivi::Lecture { invite: "citation donnée par --citation".into(), citations: vec![c], lu_le: String::new(), repondue: true })
+            });
             let (jour, _) = dates::jour_et_minute(app::maintenant());
             let (an, mois, jj) = dates::civil(jour);
             let releve = format!("{an:04}-{mois:02}-{jj:02}");
@@ -1905,6 +1939,21 @@ impl Vigie {
     /// Le moteur de page suit la feuille : il n'existe que pendant que la page
     /// est ouverte, dans le rectangle que la feuille lui reserve.
     fn synchroniser_navigateur(&mut self) {
+        if let (false, Some(s)) = (self.page_permise, self.sonde_forcee) {
+            let page = self.passage.as_ref().is_some_and(|p| p.vue == feuille::Vue::Page);
+            let voulue = if page { s } else { navigateur::Sonde::Attente };
+            if let Some(p) = self.passage.as_mut() {
+                if p.verdict != s {
+                    p.verdict = s;
+                    self.feuille = None;
+                }
+            }
+            if self.sonde != voulue {
+                self.sonde = voulue;
+                self.feuille = None;
+            }
+            return;
+        }
         let voulu = self.page_permise
             && self.passage.as_ref().is_some_and(|p| {
                 p.vue == feuille::Vue::Page && !p.ferme && self.feuille_ressort.au_repos() && matches!(passage::etat_de_fond(&p.etat), passage::Etat::Passage(_) | passage::Etat::Introuvable { .. } | passage::Etat::SansPassage { .. })
@@ -1922,6 +1971,12 @@ impl Vigie {
         let zone = self.feuille.as_ref().and_then(|(_, c)| c.zone_page);
         let Some(z) = zone else { return };
         let zone = [z.x, z.y, z.l, z.h];
+        if self.navigateur.is_none() && self.sonde != navigateur::Sonde::Indisponible && !navigateur::page_activee() {
+            eprintln!("page desactivee (VIGIE_SANS_PAGE) : rien n'est ouvert");
+            self.sonde = navigateur::Sonde::Indisponible;
+            self.feuille = None;
+            return;
+        }
         if self.navigateur.is_none() && self.sonde != navigateur::Sonde::Indisponible {
             let Some(p) = self.passage.as_ref() else { return };
             let (adresse, cherche) = passage::adresse_a_ouvrir(&p.url, &p.etat);
@@ -1938,20 +1993,31 @@ impl Vigie {
             }
             return;
         }
+        let mut geste = None;
         if let Some(n) = self.navigateur.as_mut() {
             n.poser(zone);
+            n.liberer();
             n.tic();
             let s = n.sonde();
             let echap = n.echap_demande();
+            geste = n.geste_demande();
             if s != self.sonde {
                 eprintln!("sonde : {s:?}");
                 self.sonde = s;
                 self.feuille = None;
+                if let (Some(p), true) = (self.passage.as_mut(), matches!(s, navigateur::Sonde::Trouve | navigateur::Sonde::NonRetrouve)) {
+                    p.verdict = s;
+                }
             }
             if echap {
                 eprintln!("echap dans la page");
                 self.echap_feuille();
             }
+        }
+        match geste {
+            Some(navigateur::Geste::Reculer) => self.agir_feuille(feuille::Action::Reculer),
+            Some(navigateur::Geste::Avancer) => self.agir_feuille(feuille::Action::Avancer),
+            None => {}
         }
     }
 
@@ -1970,6 +2036,68 @@ impl Vigie {
     }
 
     /// Une trame de la feuille : son ressort avance ; refermee, elle disparait.
+    /// L'ecran d'ouverture : la toile decodee arrive dans sa texture, le temps
+    /// passe (il ne compte qu'une fois la toile montree), et elle commence a
+    /// s'effacer quand les donnees sont la et qu'on l'a vue assez longtemps.
+    fn avancer_ouverture(&mut self, dt: f32, dt_ressort: f32) {
+        if self.ouverture.is_none() {
+            return;
+        }
+        if let Some(r) = &self.ouverture_recue {
+            match r.try_recv() {
+                Ok(d) => {
+                    self.ouverture_texture = Some(self.images.texture_reduite(
+                        &self.peripherique,
+                        &self.file,
+                        &d.pixels,
+                        d.largeur,
+                        d.hauteur,
+                        &d.niveaux,
+                    ));
+                    self.ouverture_taille = (d.largeur, d.hauteur);
+                    self.ouverture_recue = None;
+                }
+                // Le fil est parti sans rien rendre : la toile ne se decode
+                // pas, et la vigie s'ouvre sans elle.
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.ouverture_recue = None;
+                    self.ouverture = None;
+                    return;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        let reduit = self.mouvement_reduit();
+        let montree = self.ouverture_texture.is_some();
+        let pretes = self.donnees_pretes;
+        let Some(o) = self.ouverture.as_mut() else { return };
+        o.avancer(if montree { dt } else { 0.0 }, dt_ressort);
+        // Si les donnees ne venaient jamais, elle ne retiendrait pas la vigie
+        // plus de six secondes.
+        if o.doit_sortir(pretes || o.age >= 6.0, reduit) {
+            eprintln!("ouverture : elle s'efface apres {:.2} s (donnees pretes : {pretes})", o.age);
+            o.sortir(reduit);
+        }
+        if o.finie() {
+            eprintln!("ouverture : effacee");
+            self.ouverture = None;
+            self.ouverture_texture = None;
+        }
+    }
+
+    /// Un clic ou une touche pendant qu'elle est pleine la passe, et ne fait
+    /// rien d'autre. Dit si l'entree a ete prise.
+    fn ouverture_passer(&mut self) -> bool {
+        let reduit = self.mouvement_reduit();
+        if let Some(o) = self.ouverture.as_mut() {
+            if !o.sortie && o.opacite() > 0.5 {
+                o.sortir(reduit);
+                return true;
+            }
+        }
+        false
+    }
+
     fn avancer_feuille(&mut self, dt: f32) {
         self.recevoir_lecture();
         self.synchroniser_navigateur();
@@ -2016,6 +2144,12 @@ impl Vigie {
                     self.feuille = None;
                 }
             },
+            Action::Avancer => {
+                if let Some(n) = self.navigateur.as_ref().filter(|n| n.peut_avancer()) {
+                    n.avancer();
+                    self.feuille = None;
+                }
+            }
             Action::RevoirPassage => {
                 p.vue = feuille::Vue::Passage;
                 self.feuille = None;
@@ -2060,13 +2194,14 @@ impl Vigie {
             palette::clair(),
             palette::contraste(),
             if matches!(p.etat, passage::Etat::Chargement) { ecoule.floor() } else { 0.0 },
-        ) + &format!("|{:?}|{}", self.sonde, self.navigateur.as_ref().map_or(String::new(), |n| n.courante()));
+        ) + &format!("|{:?}|{:?}|{}|{}", self.sonde, p.verdict, self.navigateur.as_ref().map_or(String::new(), |n| n.courante()), self.navigateur.as_ref().is_some_and(|n| n.peut_avancer()));
         if self.feuille.as_ref().is_some_and(|(k, _)| *k == cle) {
             return true;
         }
         let page = p.page.as_ref().or_else(|| self.pages.get(&p.url));
         let courante = self.navigateur.as_ref().map(|n| n.courante());
-        let entree = feuille::Entree { url: &p.url, courante: courante.as_deref(), etat: &p.etat, page, vue: p.vue, ecoule, sonde: self.sonde };
+        let peut_avancer = self.navigateur.as_ref().is_some_and(|n| n.peut_avancer());
+        let entree = feuille::Entree { url: &p.url, courante: courante.as_deref(), etat: &p.etat, page, vue: p.vue, ecoule, sonde: self.sonde, peut_avancer, verdict: p.verdict };
         let c = feuille::composer(&mut self.systeme, &entree, l, h, e);
         let lignes: Vec<String> = c.surbrillance.iter().map(|b| format!("[{:.0},{:.0},{:.0},{:.0}]", b.x, b.y, b.l, b.h)).collect();
         eprintln!(
@@ -2759,12 +2894,12 @@ impl Vigie {
                     )
                 },
             ),
-            // Le direct sans agent : un etat, et ce qui va suivre.
+            // Le direct sans agent : un etat, et ce qui va suivre (cadre, C8).
             Vue::Direct if self.role.is_empty() => Some(if self.catalogue.complet {
                 (
                     "Aucun chantier ne tourne".to_string(),
                     // La suite promise doit exister : sans aucun projet, la
-                    // barre n'a que le direct.
+                    // barre n'a que le direct (juge-design.md, m4).
                     if self.onglets.len() > 1 {
                         "Le prochain qui démarre s’affichera ici de lui-même. ← et → parcourent les projets et leurs chantiers passés."
                             .to_string()
@@ -2820,6 +2955,7 @@ impl Vigie {
         self.barre.avancer(dt_ressorts);
         self.avancer_visionneuse(dt);
         self.avancer_feuille(dt);
+        self.avancer_ouverture(dt, dt_ressorts);
         self.temps += dt;
 
         use wgpu::CurrentSurfaceTexture as Etat;
@@ -2847,7 +2983,7 @@ impl Vigie {
     /// chemin : c'est la seule facon qu'une image jugee soit celle qu'on voit.
     fn dessiner_dans(&mut self, vue: &wgpu::TextureView) {
         // Sur un peripherique perdu, le premier tampon cree naitrait invalide
-        // et `create_buffer_init` paniquerait.
+        // et `create_buffer_init` paniquerait (objection 22).
         if perdu() {
             return;
         }
@@ -2949,7 +3085,7 @@ impl Vigie {
         }
 
         // La pastille ne dit qu'une chose : quelque chose travaille ici, en
-        // ce moment. Devant un chantier fini, interrompu, ou un
+        // ce moment (cadre, C7). Devant un chantier fini, interrompu, ou un
         // etat vide, elle n'est pas la. Elle respire, periode 2,6 s.
         let haut_entete = vues::ONGLETS_H * e;
         // Le titre sur sa colonne ; la pastille pend a sa gauche, dans la
@@ -2966,7 +3102,7 @@ impl Vigie {
                 couleur: {
                     // Le creux du souffle tient 3:1 sur le fond dans les deux
                     // themes : a 0,30, le clair tombait a 1,39:1 et restait
-                    // sous 3:1 pendant 1,45 s sur 2,6.
+                    // sous 3:1 pendant 1,45 s sur 2,6 (juge-design.md, M2).
                     let bas = palette::plancher_souffle();
                     palette::lineaire(palette::encre1(), bas + (1.0 - bas) * souffle)
                 },
@@ -3356,6 +3492,30 @@ impl Vigie {
             if dessus.pret {
                 let _ = self.rendu_dessus.render(&self.atlas, &self.ecran, &mut passe);
             }
+        }
+        // L'ecran d'ouverture, par-dessus tout, jusqu'a ce qu'il soit efface.
+        if let (Some(o), Some(tex)) = (&self.ouverture, &self.ouverture_texture) {
+            let taille = (self.config.width as f32, self.config.height as f32);
+            let b = ouverture::couvrir(self.ouverture_taille, taille);
+            let mut passe = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ouverture"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: vue,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                })],
+                depth_stencil_attachment: None,
+                multiview_mask: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            self.images.dessiner_avec_opacite(
+                &self.peripherique,
+                &mut passe,
+                taille,
+                &[(tex, [b.x, b.y, b.l, b.h], 0.0, o.opacite())],
+            );
         }
         // La feuille du passage, et la bulle d'un lien survole : par-dessus le
         // fil et son texte, qui sont deja dessines.
@@ -3799,8 +3959,27 @@ impl ApplicationHandler for Demarrage {
         }
         #[cfg(windows)]
         {
-            use winit::platform::windows::WindowAttributesExtWindows;
+            use winit::platform::windows::{IconExtWindows, WindowAttributesExtWindows};
             attributs = attributs.with_class_name(app::CLASSE);
+            // L'icone de la chambre noire, a la taille que Windows lui demande :
+            // la petite pour la barre de titre, la grande pour la barre des
+            // taches. Chacune est chargee a sa taille dans le .ico embarque
+            // (build.rs) : si winit n'en recevait qu'une, il la reduirait pour
+            // l'autre, et le dessin fait a part pour 16 a 32 px serait perdu.
+            let echelle_ecran = self
+                .facteur_force
+                .map(|f| f as f64)
+                .or_else(|| boucle.primary_monitor().map(|m| m.scale_factor()))
+                .unwrap_or(1.0);
+            let (petite, grande) = taille_des_icones(echelle_ecran);
+            let charger = |t: u32| winit::window::Icon::from_resource(1, Some(winit::dpi::PhysicalSize::new(t, t))).ok();
+            let (ip, ig) = (charger(petite), charger(grande));
+            eprintln!(
+                "icones : petite {petite} px {}, grande {grande} px {}",
+                if ip.is_some() { "chargee" } else { "ABSENTE" },
+                if ig.is_some() { "chargee" } else { "ABSENTE" }
+            );
+            attributs = attributs.with_window_icon(ip).with_taskbar_icon(ig);
         }
         // Une capture ne prend pas le premier plan : le clavier reste a qui
         // ecrivait.
@@ -3994,6 +4173,16 @@ impl ApplicationHandler for Demarrage {
             viser: None,
             en_attente: std::collections::VecDeque::new(),
             visionneuse: None,
+            ouverture: match (self.capture.is_some(), self.ouverture_capture) {
+                _ if std::env::var_os("VIGIE_SANS_OUVERTURE").is_some() => None,
+                (false, _) => Some(ouverture::Ouverture::nouvelle()),
+                (true, Some(o)) => Some(ouverture::Ouverture::fixee(o)),
+                (true, None) => None,
+            },
+            ouverture_texture: None,
+            ouverture_taille: (3840, 2400),
+            ouverture_recue: None,
+            donnees_pretes: false,
             vis_texture: None,
             vis_pleine: None,
             vis_textes: None,
@@ -4010,6 +4199,13 @@ impl ApplicationHandler for Demarrage {
             lire_envoi: lire_envoi,
             lire_recois: lire_recois,
             lire_jeton: 0,
+            sonde_forcee: argument("--sonde=").and_then(|a| match a.as_str() {
+                "trouve" => Some(navigateur::Sonde::Trouve),
+                "non" => Some(navigateur::Sonde::NonRetrouve),
+                "indisponible" => Some(navigateur::Sonde::Indisponible),
+                _ => None,
+            }),
+            citation_forcee: argument("--citation="),
             navigateur: None,
             page_permise: self.capture.is_none() || self.reel.is_some(),
             sonde: navigateur::Sonde::Attente,
@@ -4048,6 +4244,17 @@ impl ApplicationHandler for Demarrage {
         vigie.poser_entete();
         vigie.poser_onglets();
         vigie.montrer_onglet_actif();
+        // La toile d'ouverture se decode dans un fil a part : la fenetre ne
+        // l'attend pas.
+        if vigie.ouverture.is_some() {
+            let (envoi, recois) = std::sync::mpsc::channel();
+            vigie.ouverture_recue = Some(recois);
+            std::thread::spawn(move || {
+                if let Some(d) = ouverture::decoder() {
+                    let _ = envoi.send(d);
+                }
+            });
+        }
         self.vigie = Some(vigie);
     }
 
@@ -4058,8 +4265,8 @@ impl ApplicationHandler for Demarrage {
         // Une capture ne juge que ce que ses drapeaux posent. Sa fenetre est
         // visible le temps d'attendre, et une touche tapee ailleurs (Retour
         // arriere), un clic ou la souris qui passe y agissaient sans laisser de
-        // trace : la page au lieu du fil, 2 fois sur 14. Les clics et
-        // touches rejoues ne passent pas par ici.
+        // trace : la page au lieu du fil, 2 fois sur 14 (juge-technique.md,
+        // §4). Les clics et touches rejoues ne passent pas par ici.
         if self.capture.is_some()
             && matches!(
                 ev,
@@ -4105,6 +4312,7 @@ impl ApplicationHandler for Demarrage {
             WindowEvent::ModifiersChanged(m) => {
                 self.ctrl = m.state().control_key();
                 self.maj = m.state().shift_key();
+                self.alt = m.state().alt_key();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 // Les positions de winit sont en pixels physiques, comme tout
@@ -4125,6 +4333,7 @@ impl ApplicationHandler for Demarrage {
                 v.curseur = None;
                 self.redessiner |= v.survoler();
             }
+            WindowEvent::MouseInput { state: ElementState::Pressed, .. } if v.ouverture_passer() => {}
             WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
                 // Un clic agit au RELACHEMENT, et seulement sur ce qui etait
                 // sous la souris a l'appui : on peut encore se raviser en
@@ -4206,6 +4415,7 @@ impl ApplicationHandler for Demarrage {
                 }
                 v.survoler();
             }
+            WindowEvent::KeyboardInput { event, .. } if event.state.is_pressed() && v.ouverture_passer() => {}
             WindowEvent::KeyboardInput { event, .. } => {
                 use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
                 if let Some(ferme) = v.visionneuse.as_ref().map(|x| x.ferme) {
@@ -4241,7 +4451,10 @@ impl ApplicationHandler for Demarrage {
                     if !event.state.is_pressed() {
                         return;
                     }
+                    let dans_la_page = v.passage.as_ref().is_some_and(|p| p.vue == feuille::Vue::Page);
                     match event.logical_key {
+                        Key::Named(NamedKey::ArrowLeft) if self.alt && dans_la_page => v.agir_feuille(feuille::Action::Reculer),
+                        Key::Named(NamedKey::ArrowRight) if self.alt && dans_la_page => v.agir_feuille(feuille::Action::Avancer),
                         Key::Named(NamedKey::Escape) | Key::Named(NamedKey::Backspace) => v.echap_feuille(),
                         Key::Named(NamedKey::Enter) => v.entree_feuille(),
                         Key::Character(ref c) if c.eq_ignore_ascii_case("r") => {
@@ -4589,6 +4802,16 @@ impl ApplicationHandler for Demarrage {
                         eprintln!("clic dans la visionneuse : position {:.2} s sur {:.2} s", lec.position(), lec.forme.duree);
                     }
                 }
+                // --ouverture= : la toile se decode dans son fil ; la capture
+                // l'attend (huit secondes au plus), sans faire avancer le temps.
+                if v.ouverture.is_some() {
+                    let debut = Instant::now();
+                    while v.ouverture_texture.is_none() && v.ouverture.is_some() && debut.elapsed().as_secs_f32() < 8.0 {
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                        v.avancer_ouverture(0.0, 0.0);
+                    }
+                    eprintln!("ouverture : {}", if v.ouverture_texture.is_some() { "montree" } else { "absente" });
+                }
                 if let Some((z, p)) = self.loupe.take() {
                     v.zoomer_visionneuse(z, p);
                     if let Some(x) = v.visionneuse.as_mut() {
@@ -4605,6 +4828,7 @@ impl ApplicationHandler for Demarrage {
                 v.avancer_visionneuse(0.0);
                 // Ce que la capture montre, pour que celui qui la refait sache si
                 // c'est l'etat voulu sans la regarder.
+                if self.reel.is_none() || self.reel_debut.is_none() {
                 eprintln!(
                     "etat capture : vue {:?}, {} blocs, image visee {}, theme {}, fil {}, a {:.1} s",
                     v.vue,
@@ -4614,8 +4838,21 @@ impl ApplicationHandler for Demarrage {
                     if v.fil_lu { "lu" } else { "non lu" },
                     ecoule
                 );
+                }
 
                 v.journal_des_liens();
+                if self.reel.is_some() && self.ouvrir_page && v.passage.as_ref().is_some_and(|p| p.vue == feuille::Vue::Passage && !matches!(p.etat, passage::Etat::Chargement)) {
+                    // Le second geste, une fois la lecture arrivee : l'action
+                    // principale de la feuille (« Ouvrir la page », ou « Ouvrir
+                    // quand meme » pour une adresse locale, puis la page).
+                    if v.passage.as_ref().is_some_and(|p| feuille::action_principale(&p.etat, v.feuille_ecoule()).is_some()) {
+                        v.entree_feuille();
+                        eprintln!("geste de Stone : action principale de la feuille");
+                    }
+                    if v.passage.as_ref().is_some_and(|p| p.vue == feuille::Vue::Page) {
+                        self.ouvrir_page = false;
+                    }
+                }
                 if let Some(s) = self.reel {
                     // Pas de capture : la page vit ses s secondes, qu'une
                     // photographie de la fenetre entiere vient prendre de l'exterieur.
@@ -4643,6 +4880,7 @@ impl ApplicationHandler for Demarrage {
             || !v.barre.au_repos()
             || v.visionneuse.is_some()
             || v.passage.is_some()
+            || v.ouverture.is_some()
         {
             v.fenetre.request_redraw();
         }
@@ -4651,11 +4889,36 @@ impl ApplicationHandler for Demarrage {
         // visionneuse ouverte en demande un toutes les 8 ms : une video a 30
         // images par seconde n'en montrerait sinon que 25, et l'ouverture
         // sauterait des pas.
-        let reveil = if v.visionneuse.is_some() || v.passage.is_some() { 8 } else { 40 };
+        let reveil = if v.visionneuse.is_some() || v.passage.is_some() || v.ouverture.is_some() { 8 } else { 40 };
         boucle.set_control_flow(ControlFlow::WaitUntil(
             Instant::now() + std::time::Duration::from_millis(reveil),
         ));
     }
+}
+
+/// Les tailles d'icone que Windows demande : la petite (barre de titre) et la
+/// grande (barre des taches), selon l'echelle de l'ecran. Ce sont des tailles
+/// du .ico (16 a 24 et 32 a 64) : chacune a son dessin.
+fn taille_des_icones(echelle: f64) -> (u32, u32) {
+    let petite = if echelle < 1.25 {
+        16
+    } else if echelle < 1.5 {
+        20
+    } else if echelle < 2.0 {
+        24
+    } else {
+        32
+    };
+    let grande = if echelle < 1.25 {
+        32
+    } else if echelle < 1.5 {
+        40
+    } else if echelle < 2.0 {
+        48
+    } else {
+        64
+    };
+    (petite, grande)
 }
 
 /// Un titre de jour repris au milieu d'une phrase : « lancé aujourd’hui »,
@@ -4867,6 +5130,7 @@ fn main() {
         envoi_fiche: Some(envoi_fiche),
         attente: argument("--attente=").and_then(|a| a.parse().ok()).unwrap_or(2.5),
         maj: false,
+        alt: false,
         redessiner: false,
         clic: argument("--clic=").and_then(|a| point(&a)),
         touches: argument("--touches=")
@@ -4892,9 +5156,11 @@ fn main() {
         viser: argument("--viser=").map(std::path::PathBuf::from),
         reel: argument("--reel=").and_then(|a| a.replace(',', ".").parse().ok()),
         reel_debut: None,
+        ouvrir_page: std::env::args().any(|a| a == "--ouvrir-page"),
         ouvrir: argument("--viser=")
             .filter(|_| std::env::args().any(|a| a == "--ouvrir"))
             .map(std::path::PathBuf::from),
+        ouverture_capture: argument("--ouverture=").and_then(|a| a.replace(',', ".").parse::<f32>().ok()),
         loupe: argument("--loupe=").and_then(|a| {
             let n: Vec<f32> = a.split(',').filter_map(|x| x.trim().parse().ok()).collect();
             match n[..] {
@@ -4924,6 +5190,7 @@ fn main() {
     // La fenetre detruite avant la relance : sans cela, la nouvelle vigie
     // trouverait l'ancienne ouverte et rendrait la main.
     drop(demarrage);
+    navigateur::attendre_les_suppressions();
     if perdu() {
         relancer(capture);
     }

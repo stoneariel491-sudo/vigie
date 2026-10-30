@@ -12,3 +12,5 @@
 /design/navigateur/*/donnees/vigie
 /design/navigateur/*/donnees-vide
 /design/navigateur/*/outils/.venv
+/demo/donnees
+__pycache__/

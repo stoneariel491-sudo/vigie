@@ -1,12 +1,12 @@
 //! Le verre de la visionneuse : la vue de la vigie floutee sous l'image
 //! ouverte, et les plaques de verre ou se posent son titre et ses commandes.
 //!
-//! La matiere est celle de veilleuse, arbitree par l'auteur
-//! (`DECISION.md` du depot veilleuse, « Pour l'integrateur ») : flou de 18 px en
+//! La matiere est celle de vitrine, arbitree par l'auteur
+//! (`vitrine/DECISION.md`, « Pour l'integrateur ») : flou de 18 px en
 //! lineaire, vibrance 1,35, teinte noire posee sur les octets encodes, verre
 //! N-BK7 d'indice 1,5168, conge et epaisseur de 12 px pour une hauteur de 148,
 //! reflexion de Fresnel exacte moyennee sur huit prises, lampe d'ecran au
-//! niveau 85 sur le chant (`veilleuse/src/galet.rs`, `NIVEAU_DEPLOYE`).
+//! niveau 85 sur le chant (`vitrine/src/galet.rs`, `NIVEAU_DEPLOYE`).
 //!
 //! Le chemin d'une trame, la visionneuse ouverte : la vue est dessinee dans
 //! `scene` au lieu de l'ecran ; deux passes de flou la portent a
@@ -15,7 +15,7 @@
 
 use wgpu::util::DeviceExt;
 
-/// Le flou du fond, en pixels de la scene a l'echelle 1 (veilleuse : 18).
+/// Le flou du fond, en pixels de la scene a l'echelle 1 (vitrine : 18).
 pub const SIGMA: f32 = 18.0;
 /// La teinte du fond : celle du verre arbitre, qui pose l'image ouverte sur
 /// une page qu'on devine sans la lire.
@@ -25,7 +25,7 @@ pub const TEINTE_FOND: f32 = 0.80;
 pub const TEINTE_PLAQUE: f32 = 0.62;
 /// Au theme clair, la page floutee est claire, et les memes teintes la
 /// laissaient grise : sous les plaques, l'encre de leurs textes tombait a
-/// 2,60:1 (mesure sur la capture). Le verre reste sombre
+/// 2,60:1 (passage B du tour 00, mesure sur la capture). Le verre reste sombre
 /// dans les deux themes, comme Coup d'oeil : la teinte monte pour que les
 /// plaques retrouvent le fond qu'elles ont sur la page sombre.
 pub const TEINTE_FOND_CLAIR: f32 = 0.95;
@@ -40,9 +40,9 @@ fn teintes() -> (f32, f32) {
 }
 pub const SATURATION: f32 = 1.35;
 pub const INDICE: f32 = 1.5168;
-/// Le conge et l'epaisseur, rapportes a la hauteur comme dans veilleuse.
+/// Le conge et l'epaisseur, rapportes a la hauteur comme dans vitrine.
 pub const CONGE_SUR_HAUTEUR: f32 = 12.0 / 148.0;
-/// La force de la reflexion a l'echelle 1,25 de ce poste (veilleuse : 0,24).
+/// La force de la reflexion a l'echelle 1,25 de ce poste (vitrine : 0,24).
 pub const LISERE: f32 = 0.24;
 /// Le niveau du chant sous la lampe, sur 255, galet deploye.
 pub const NIVEAU_LAMPE: f32 = 85.0;
@@ -294,7 +294,7 @@ impl Verre {
     ) {
         let Some(c) = self.couches.as_ref() else { return };
         let (l, h) = (c.taille.0 as f32, c.taille.1 as f32);
-        // Le sigma est celui de veilleuse, a l'echelle de l'ecran, puis divise
+        // Le sigma est celui de vitrine, a l'echelle de l'ecran, puis divise
         // par deux : la seconde passe le lit a demi-resolution.
         let sigma = SIGMA * e * 0.5;
         let rayon = (3.0 * sigma).ceil();
@@ -369,7 +369,7 @@ mod essais {
         assert!(bord > r0 && bord < 1.0);
     }
 
-    /// Le niveau 85 de la lampe, en lineaire : la valeur que veilleuse pose.
+    /// Le niveau 85 de la lampe, en lineaire : la valeur que vitrine pose.
     #[test]
     fn la_lampe_en_lineaire() {
         assert!((lineaire(85.0) - 0.0908).abs() < 1e-3);

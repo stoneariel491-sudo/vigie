@@ -1,3 +1,5 @@
+> Note : ce document est tiré du journal de travail de l'auteur. Les dossiers `design/`, `REPRISE.md` et `SOCLE.md` qu'il cite appartiennent à une archive privée et ne sont pas dans ce dépôt.
+
 # Vigie
 
 Une fenêtre pour regarder penser les agents, pendant qu'ils travaillent.
@@ -119,15 +121,15 @@ dirait plus rien ; en marquer un fait que l'œil trouve d'emblée ce qui compte.
 ### La console
 
 Le 2026-10-27, devant les quatre directions du tour de design 00, Stone a
-choisi « D · console » : la vigie comme
+choisi « D · console » (`design/tours/tour-00/DECISION.md`) : la vigie comme
 un instrument qu'on lit comme un moniteur. Un geste tient une ligne de
 20 points à 13 points de corps, sans air entre deux gestes ; l'en-tête porte
 le mot de l'état à droite du titre et compte ce que le fil contient
-(`design-de-l-application · mon-projet · 75 gestes, 2 messages, 12 images`) ;
+(`design-de-l-application · atelier-d · 75 gestes, 2 messages, 12 images`) ;
 la pastille ne respire que devant ce qui travaille. Une image recopiée par un
 `cp` ne se montre pas deux fois : elle devient une ligne, `Image
 tan_manim.png · la même que Tangente_ManimCE_v0.22.0.png`. La palette est
-celle du système du tour : trois
+celle du système du tour (`design/tours/tour-00/systeme.md` §4) : trois
 encres, aucune teinte, l'alerte toujours avec un mot ; et deux thèmes,
 sombre et clair, que la touche `T` fait tourner avec celui de Windows.
 
@@ -138,7 +140,7 @@ lui-même. Sa page reprend la grille de la liste.
 
 - **L'en-tête** dit son état, ses agents, ses images, quand il a été lancé et
   dans quel projet : `en cours · 5 agents · 19 images · lancé aujourd'hui à
-  09:49 · mon-projet`.
+  09:49 · atelier-d`.
 - **Les agents**, en chronologie : rangés sous leur phase (`Balayage`,
   `Synthèse`, `Contre-épreuve`), chacun sa ligne, et sur un axe d'heures
   commun au chantier une barre de son début à sa dernière écriture, une
@@ -169,7 +171,7 @@ et c'est le seul signe qui dise qu'il se clique.
 ### Le bilan d'un agent
 
 Un bilan est un texte, ou un objet quand le chantier demande une réponse
-structurée. Vu le 2026-10-27 sur un chantier de figures : `{"verdict": …}`
+structurée. Vu le 2026-10-27 sur `troncons-tome3-figures` : `{"verdict": …}`
 pour les juges, `{"figures": [...]}` pour les lots. La règle : le champ qui
 conclut (`verdict`, `resume`, `summary`, `bilan`, `conclusion`, `message`),
 sinon le premier texte, sinon le compte d’une liste (« 2 figures »). Les
@@ -192,7 +194,7 @@ catalogue en cours de parcours :
 | chantier | agents | images | première lecture |
 |---|---|---|---|
 | `design-de-l-application` | 5 | 24, vidéos comprises | 3,3 s |
-| un chantier de figures | 7 | 146 | 4,2 s |
+| `troncons-tome3-figures` | 7 | 146 | 4,2 s |
 
 Une vignette est gardée à 480 px au plus, ce qui laisse la marge d'un zoom à
 trois de front ; 146 vignettes tiennent ainsi une centaine de mégaoctets. La
@@ -237,7 +239,7 @@ qu'elle a imprimé ; l'image, elle, est sur le disque, et la vigie l'y lit.
   vue que dans la sortie d'un geste ; à preuve égale, au premier agent du
   chantier. Le compte d'images d'un agent est celui de la planche, si bien
   que les comptes s'additionnent au total du chantier (3 + 13 + 9 + 4 = 29
-  pour `design-de-l-application`, 146 pour le chantier de figures).
+  pour `design-de-l-application`, 146 pour `troncons-tome3-figures`).
 - **La légende** dit ce qu'est l'image : `planche.png · produite · 2000 × 640`,
   ou `ouverte` pour celle que l'agent a regardée, ou `vidéo de 3 s`. La taille
   est celle du fichier, pas celle des pixels gardés : une capture de 2 000 px
@@ -370,24 +372,24 @@ taille en pixels). Un clic l'ouvre dans la visionneuse, sous le même verre :
   avait lu une seconde de voix, le 2026-10-29). `--clic-vis=x,y` clique dans la
   visionneuse ouverte, par la même fonction que la souris.
 
-Vérifié sur de vrais enregistrements de voix (six
+Vérifié sur les vrais enregistrements de l'atelier voix du cours LLM (six
 `.wav` de 4 et 10 s, copiés dans un chantier de test) : les six apparaissent
 avec leur onde, l'un s'ouvre, et un clic à 60 % de l'onde amène la lecture à
-6,16 s sur 10,24 s. **Non entendu** pendant l'essai : la voix elle-même (la
+6,16 s sur 10,24 s. **Non entendu** par moi : la voix elle-même (la
 visionneuse la lit par la sortie audio de Windows, mais l'essai de la lecture
 est muet exprès). Le compte de la page d'un chantier (« 25 images ») compte
 encore les sons parmi les images.
 
 ### Le verre
 
-La matière est celle de veilleuse, arbitrée par l'auteur
-(`DECISION.md` du dépôt veilleuse, « Pour l'intégrateur ») et reprise dans
+La matière est celle de vitrine, arbitrée par l'auteur
+(`vitrine/DECISION.md`, « Pour l'intégrateur ») et reprise dans
 `src/verre.wgsl`, dont les fonctions de forme et de biseau sont celles de
-`veilleuse/src/galet.wgsl` à la lettre.
+`vitrine/src/galet.wgsl` à la lettre.
 
 - **Le fond.** La visionneuse ouverte, la vue de la vigie se dessine dans une
   texture au lieu de l'écran. Deux passes de flou gaussien, en linéaire, la
-  portent à demi-résolution (comme le givre de veilleuse : le coût divisé par
+  portent à demi-résolution (comme le givre de vitrine : le coût divisé par
   huit) avec σ = 18 px à l'échelle de l'écran ; puis la vibrance 1,35 et la
   teinte noire 0,80 posée sur les octets encodés. La vue nette se fond dans ce
   verre à mesure que l'image s'ouvre.
@@ -396,8 +398,8 @@ La matière est celle de veilleuse, arbitrée par l'auteur
   coin continu), un congé et une épaisseur de 12 px pour 148 de haut, l'indice
   1,5168 du N-BK7, la réfraction de Snell au biseau, la réflexion de Fresnel
   exacte moyennée sur huit prises, et la lampe d'écran sur le chant, au niveau
-  85 (`NIVEAU_DEPLOYE` de veilleuse).
-- **Ce qui change de veilleuse.** L'îlot se pose sur le bureau ; une plaque se
+  85 (`NIVEAU_DEPLOYE` de vitrine).
+- **Ce qui change de vitrine.** L'îlot se pose sur le bureau ; une plaque se
   pose ici sur un fond déjà assombri. Sa teinte est donc plus légère (0,62,
   choisie, non mesurée), pour qu'elle se lise comme une lame plus claire. Et sa
   réflexion lit le fond tel qu'il est composé, pas la vue nette : lire la vue
@@ -437,7 +439,7 @@ claude est parfaite ».
   plaque et l'encre-1, les autres sont en encre-3. Trop de projets pour la
   hauteur : la molette sur la barre fait glisser les projets seuls.
 - **Sa largeur** est fixe, 176 points, et elle a été tranchée par la planche
-  et par le calcul de la mise en page : à la moitié
+  (`design/tours/tour-00/passage-b/artisan/cout_barre.py`) : à la moitié
   d'écran, 188 points ne laissaient que 2 vignettes de front, 176 en laissent
   3, contre 4 barre masquée.
 - **Se masquer et revenir, à la main.** Un bouton toujours visible en haut à
@@ -466,7 +468,7 @@ claude est parfaite ».
 barre latérale, que la main de Stone connaît ; et un rapport d'utilisateur
 de l'application Claude de bureau la lui attribue aussi (« the pinned state
 (Ctrl+B) », <https://claudeissues.com/issue/75523-desktop-expose-a-persistent-keep-sidebar-open-setting-the-pinned-state-ctrl-b-is>,
-consulté le 2026-10-27 de seconde main ; Anthropic ne publie pas la liste,
+lu le 2026-10-27 par résumé de recherche ; Anthropic ne publie pas la liste,
 donc **non vérifié** à la source). `B` est à la même place en AZERTY et en
 QWERTY, et la touche est lue par sa position physique, comme les chiffres.
 macOS dit `Ctrl` + `Cmd` + `S` pour « Afficher la barre latérale », une touche
@@ -476,7 +478,7 @@ que Windows n'a pas.
 
 Le dossier où la session a été lancée ne dit pas le projet : une session
 ouverte dans le dossier personnel range sous lui des chantiers qui
-travaillent dans d'autres dépôts. Le vrai lieu est le champ
+travaillent dans `atelier-e` ou `atelier-b`. Le vrai lieu est le champ
 `cwd` des transcriptions d'agent, et il varie d'un agent à l'autre dans un
 même chantier. La règle :
 
@@ -490,7 +492,7 @@ même chantier. La règle :
 3. Le dossier personnel, `AppData` (les brouillons temporaires) et `.claude`
    ne votent pas : ce sont des endroits d'où l'on part, pas des projets.
 4. Chaque lieu est ramené au dépôt git qui le contient :
-   `veilleuse\recherche\verre-taille` compte pour `veilleuse`.
+   `vitrine\recherche\verre-taille` compte pour `vitrine`.
 5. Le lieu le plus fréquent l'emporte ; à égalité, celui de l'agent le plus
    ancien, qui a ouvert le travail. Sans aucun lieu, le chantier va au
    **dossier personnel**. Le Bureau s'appelle « Bureau ».
@@ -518,7 +520,7 @@ La **description** vient du bilan ou du script ; sans elle, la ligne montre
 l'identifiant. L'**heure** est celle du lancement, la création du dossier du
 chantier ; la dernière écriture ne sert qu'à l'état. Le **nombre d'agents** est celui des
 transcriptions sur le disque : il compte les relances, ce que le bilan ne fait
-pas (29 pour un chantier relevé, contre 24 dans son bilan).
+pas (29 pour `atelier-e-briques`, contre 24 dans son bilan).
 
 ### La liste d'un projet
 
@@ -536,7 +538,7 @@ Un clic sur une ligne **suit ce chantier** : la vigie s'attache à l'agent qui
 bouge dans ce chantier, avec la même reprise de vingt entrées que le direct.
 Le fil affiché se vide et repart ; ce que le fil de suivi envoyait encore
 pour l'ancien choix est écarté (`suivi::garder`). L'en-tête dit qui parle, et
-dans quel chantier : `<chantier> · fini`.
+dans quel chantier : `atelier-e-briques · fini`.
 
 La souris agit au **relâchement**, et seulement sur ce qui était sous elle à
 l'appui : on peut se raviser en glissant hors de la cible. La ligne survolée
@@ -593,8 +595,8 @@ pour 140 chantiers et 1 250 agents lus.
   chantier ; le fil seul garde sa colonne de lecture, centrée dans le bloc,
   parce qu'au-delà de 78 signes une ligne se lit mal. La planche prend autant
   de colonnes que la place en donne, une vignette faisant au moins 240 points :
-  4 sur la fenêtre agrandie, 3 dans la fenêtre de départ, 2 en fenêtre étroite.
-  Tout s'aligne sur le même bord gauche, et rien ne
+  4 sur la fenêtre agrandie, 3 dans la fenêtre de départ, 2 en fenêtre étroite
+  (`captures/equilibre/`). Tout s'aligne sur le même bord gauche, et rien ne
   saute quand on passe d'une vue à l'autre.
 - **L'échelle du système est appliquée.** Sans elle tout paraît minuscule sur
   un écran dense, et l'on croit l'application mal faite.
@@ -607,6 +609,74 @@ pour 140 chantiers et 1 250 agents lus.
 - **Une commande longue est coupée à une ligne.** Dans la première version, une
   commande occupait six lignes contre quatre pour un raisonnement entier. Le
   détail complet vit de toute façon dans l'archive de raisonnement.
+
+## Les liens, l'extrait et la page
+
+Le 2026-10-29, Stone :
+
+> « j'ai ai une idéé et si on mettait un navigateur interne à vidgie et la
+> possiblité de cliquer sur un lien et il s'ouvre en gros la possiblité que
+> tout les liens dans vigies soit clickable qui lead directement vers un lien
+> ouvert avec exactement en surligner ce que l,on cherche convoque un designer
+> pour ca »
+
+Devant les trois directions du designer, il a choisi : « D3 : le passage
+d'abord » (`design/navigateur/tour-01/DECISION.md`). Un clic sur un lien ne
+ouvre pas une page : il ouvre un **extrait**, sous le verre de la vigie. La
+page n'est ouverte que par un second geste.
+
+**Le lien.** Un lien est une adresse `http(s)://` de la parole, de la pensée,
+d'un geste `WebFetch` (la ligne entière) ou d'une commande `curl` (l'adresse
+seule). Il est souligné d'un point, et marqué d'un point d'ambre quand l'agent a
+cité un passage de cette page. Les modèles d'adresse (`https://…/{id}`) ne sont
+pas des liens. Les résultats d'outil restent muets, comme avant. Les bilans
+d'un chantier ne montrent que leur première phrase : aucun lien n'y est
+cliquable aujourd'hui. Au survol, une bulle dit l'hôte réel, entier, et si un
+passage est cité ; **rien n'est lu avant le clic**.
+
+**L'extrait** (`src/feuille.rs`, `src/passage.rs`). Au clic, la vigie lit la
+page : un seul GET, sans script ni cookie ni compte, par `ureq` (`src/reseau.rs`).
+Elle montre la phrase que l'agent a citée, surlignée, avec son contexte, l'hôte
+réel, ce que l'agent demandait à la page, et la date de lecture. Ce que
+l'agent a demandé et cité est lu dans la transcription : l'invite du geste
+`WebFetch` et les passages entre guillemets (huit mots au moins) de sa réponse
+(`suivi::Lecture`). C'est le texte de la page **d'aujourd'hui**, lu sans script :
+il peut différer de celui que l'agent a lu, et la feuille le dit. Sans citation,
+elle le dit aussi (« aucun passage cité ») et la page s'ouvre en haut.
+
+**La page** (`src/navigateur.rs`). « Ouvrir la page » ouvre une fenêtre
+WebView2 dans la fenêtre de la vigie, sous un cadre qui garde l'adresse réelle,
+la citation et le retour. L'adresse porte un fragment de texte (`#:~:text=`) que
+le moteur applique ; si la page n'a pas défilé au bout de 2,5 s, un script de la
+vigie cherche le texte jusqu'à quinze secondes (les pages remplies après coup) et
+le surligne. Il ne reçoit que ce texte, et la page n'a aucun pont vers la
+vigie : la vigie l'interroge, jamais l'inverse. Si rien n'est trouvé, le
+bandeau dit « Passage non retrouvé dans la page ». Le moteur n'est chargé qu'au
+second geste. Si WebView2 manque, la feuille le dit.
+
+**Ce que la page ne peut pas** (`design/navigateur/tour-01/cadre.md` §6) : elle
+n'est jamais ouverte seule ; son profil est InPrivate, vide, dans
+`%TEMP%\vigie-navigateur-<pid>-<n>`, supprimé à la fermeture (et ceux qu'un arrêt
+forcé laisse, balayés au lancement suivant) ; aucun téléchargement, aucune
+permission (caméra, micro, position, notifications…), aucune fenêtre fille ;
+seuls `http:` et `https:` naviguent (`file:`, `javascript:`, `data:` sont refusés) ;
+`localhost` demande avant ; une page qui demande une connexion reste sans
+compte, et le dit. La lecture de l'extrait refuse les adresses privées au
+moment de la résolution du nom (sauf accord pour `localhost`), borne la page à
+2 Mio et le temps à 10 s, suit au plus cinq redirections en jugeant chacune,
+et dit celle qui change d'hôte.
+
+**Le clavier.** `Tab` et `Maj` + `Tab` passent d'un lien du fil au suivant,
+`Entrée` l'ouvre. Dans l'extrait, `Entrée` fait l'action principale, `Échap`
+ferme l'extrait ; dans la page, `Échap` revient à l'extrait, puis le ferme : la
+vigie ne se ferme jamais tant que l'extrait ou la page est ouverte. Quand la
+page a le focus, les touches vont à la page : seul `Échap` revient à la vigie,
+par un écouteur que la vigie y pose et interroge (au plus 300 ms de retard) ;
+`Tab`, les flèches et `Ctrl` + `B` appartiennent à la page. Les raccourcis du
+moteur (F5, impression, `Alt` + `←`) sont coupés par un réglage, non essayé à la main.
+
+Les mesures, ce qui reste faux et la manière de tout refaire sont dans
+`design/navigateur/tour-01/passage-b/artisan.md`.
 
 ## Les drapeaux
 
@@ -630,11 +700,19 @@ pour 140 chantiers et 1 250 agents lus.
 | `--ouvrir` | avec `--viser`, ouvre cette image dans la visionneuse et attend son image pleine |
 | `--barre=masquee\|visible` | impose le choix de la barre que le souvenir donnerait |
 | `--mouvement-reduit`, `--contraste-eleve` | imposent les deux réglages de Windows pour une capture, sans toucher à ceux du poste |
+| `--lien=n\|motif` | clique le n-ième lien visible du fil, ou le premier dont l'adresse contient le motif, par la fonction de la souris (le 2026-10-29, passage B du navigateur) |
+| `--survol-lien=n\|motif` | pose la souris sur ce lien pour la capture : la bulle dit l'hôte réel |
+| `--adresse=url` | ouvre l'extrait d'une adresse qu'aucun chantier ne porte (un schéma refusé, une adresse locale) |
+| `--reseau=lent\|404\|503\|certificat\|delai\|hors-ligne\|connexion\|fichier\|redirection\|introuvable` | force ce qu'un réseau sain ne donne pas, pour qu'une capture montre l'état |
+| `--ecoule=s`, `--sonde=trouve\|non\|indisponible`, `--citation=texte` | les secondes qu'affiche un chargement ; ce que la page ouverte aurait répondu (sans moteur) ; la citation d'un lien ouvert par `--adresse` |
+| `--reel=s`, `--ouvrir-page` | la vigie rejoue ses drapeaux comme pour une capture, mais reste ouverte s secondes avec le moteur de page permis, et fait le second geste : de quoi voir une vraie page dans une fenêtre à soi (`design/navigateur/tour-01/passage-b/essai-reel.ps1`) |
+| `VIGIE_PAGES=<dossier>` | variable : des pages préparées (JSON) lues à la place du réseau, pour les captures |
 | `VIGIE_MAINTENANT=<s>` | variable : fige l'heure de la vigie (secondes Unix), pour qu'une copie figée reste « aujourd'hui » et « en cours » |
 | `VIGIE_DONNEES=<dossier>` | variable : lit les chantiers sous `<dossier>\projects` et garde la mémoire sous `<dossier>\vigie`, jamais dans `%APPDATA%\Vigie`, qui est celui de la vigie installée |
 | `VIGIE_PERDRE=<s>` | variable : détruit le périphérique graphique à s secondes, une fois, dans la première vigie seulement ; le témoin de la relance (ci-dessous) |
 
-Les quatre derniers avant `VIGIE_PERDRE` datent du 2026-10-27 (tour de design 00). Leur essai : à `--echelle=1.5
+Les quatre derniers avant `VIGIE_PERDRE` datent du 2026-10-27 (tour de design 00). Leur essai est
+`design/tours/tour-00/outils/essai_echelle.sh` : à `--echelle=1.5
 --taille=640x400`, la capture doit faire 960 × 600 et annoncer l'échelle 1,50 ;
 son témoin, la même capture sans `--echelle`, tombe sur ce poste à 125 %
 (800 × 500). Avant `VIGIE_DONNEES`, toute capture écrivait le catalogue dans
@@ -644,7 +722,7 @@ son témoin, la même capture sans `--echelle`, tombe sur ce poste à 125 %
 réinitialisée par le pilote, ou à court de mémoire quand d'autres programmes
 la prennent (wgpu-core traite un manque de mémoire comme une perte). Jusqu'au
 2026-10-27, le premier tampon créé ensuite naissait invalide et la vigie
-paniquait (`Buffer with 'ecran' label is invalid`).
+paniquait (`Buffer with 'ecran' label is invalid`, objection 22 du passage B).
 Elle se relance désormais elle-même, avec les mêmes drapeaux, trois fois au
 plus (`relancer`, dans `main.rs`) ; une capture attend la sienne et rend son
 code ; la fenêtre, qui garde son souvenir en sortant, le relit en se
@@ -653,8 +731,8 @@ journal dit la carte au
 lancement, la perte et sa raison, puis la relance. Le témoin :
 `VIGIE_PERDRE=1.5` sur une capture du fil doit écrire la capture et
 « relance 1 sur 3 » ; quand le rappel de perte ne lève plus le drapeau, la
-même capture panique sur un tampon né invalide, comme avant la
-correction.
+même capture panique sur un tampon né invalide, comme dans l'objection
+(`design/tours/tour-00/passage-b/correcteur-2/saboter.sh`).
 
 Avec `--capture`, la vigie attend le catalogue entier (une minute et demie au
 plus) avant de juger, la fiche d'une page de chantier, et `--attente` de plus
@@ -664,9 +742,10 @@ demie au plus), puis une seconde de calme ; le journal le dit (« fil lu, à
 3,0 s »). La fenêtre d'une capture ne prend pas le premier plan, et toute
 entrée réelle (touche, clic, molette, souris) y est ignorée et notée au
 journal (« entree reelle ignoree ») : une touche tapée ailleurs ramenait la
-capture du fil à la page du chantier, sans trace. Les captures d'essai ne
-sont pas dans le dépôt (`.gitignore` les laisse dehors) : elles montrent la
-pensée réelle des agents.
+capture du fil à la page du chantier, sans trace. Les captures du 2026-10-03 sont rangées sous
+
+`captures/onglets/`, que `.gitignore` laisse hors du dépôt comme les autres :
+elles montrent la pensée réelle des agents.
 
 `--essai` est le **témoin du recours de police**. Barlow n'a ni grec ni
 symboles, et la pensée d'un agent qui fait de l'optique est pleine de θ et de
@@ -698,7 +777,7 @@ que du code testé :
 |---|---|
 | `plan::essais` | ce qui est sous la souris : un onglet, rien entre deux, rien hors de la bande, « Direct » au-dessus d'un onglet qui glisse dessous, aucune ligne cachée sous l'en-tête ; et le défilement qui montre une ligne en bougeant le moins possible |
 | `dates::essais` | le calendrier (réponses du module `datetime` de Python), les jours nommés à la française, l'année seulement quand elle change |
-| `catalogue::essais` | les deux écritures d'un chemin, les non-lieux, le dépôt qui l'emporte sur le dossier personnel (la forme relevée sur un vrai dépôt), l'égalité, la règle d'état à 29 et 31 minutes, l'en-tête exact d'un vrai script, le tri des projets |
+| `catalogue::essais` | les deux écritures d'un chemin, les non-lieux, le dépôt qui l'emporte sur le dossier personnel (la forme relevée sur atelier-b), l'égalité, la règle d'état à 29 et 31 minutes, l'en-tête exact d'un vrai script, le tri des projets |
 | `suivi::essais` | qu'un choix abandonné ne laisse rien passer, même deux choix coup sur coup ; qu'une image écrite pendant un geste entre dans le fil, et qu'une image listée par un `ls` à un autre moment n'y entre pas |
 | `medias::essais` | les noms lus dans les vraies commandes et sorties du chantier de design (`ffmpeg … planche.png`, un `ls -la`, un `find`), le dossier d'un `cd`, la règle de production dans ses deux cas et ce qu'elle exclut, le signe de lecture visible sur du noir |
 | `chantier::essais` | les trois formes de bilan : un texte, un objet à verdict, un objet qui n'est qu'une liste ; une image listée par un agent et écrite par un autre va à celui qui l'a écrite |
@@ -711,18 +790,30 @@ que du code testé :
 | `suivi::essais` (suite) | la parole se lit sans ses accents graves ni ses astérisques d'emphase |
 | `chantier::essais` (suite) | une image recopiée sous un autre nom ne compte qu'une fois sur la planche |
 | `vues::essais_coupe` | un chemin trop long garde son dossier et son nom ; un mot sans chemin, une adresse web et un chemin court ne bougent pas |
+| `suivi::essais` (suite, 2026-10-29) | les passages entre guillemets d'une réponse (huit mots au moins, trois sortes de guillemets) ; un geste `WebFetch` garde son invite et apprend ses citations quand sa réponse arrive |
+| `reseau::essais` | le texte visible d'une page (ni script, ni style, ni commentaire) ; les entités ; les adresses privées reconnues, v4 et v6 ; une adresse locale qui ne part pas sans accord et part avec, sans cookie ; un serveur local qui répond 404, 401, 500, un PDF, une pièce jointe, un champ de mot de passe ; la lecture bornée en octets (flux sans fin) ; une redirection suivie et dite, ou refusée vers `file:` ; un serveur muet coupé au délai ; un nom public qui résout vers le local refusé à la résolution (exige un réseau) |
+| `passage::essais` (suite) | la citation que la page contient choisie parmi celles de l'agent ; le fragment de texte (tiret, virgule, esperluette codés, début et fin d'un passage long) ; la lecture du réseau devenue l'état de la feuille ; l'adresse à ouvrir |
+| `navigateur::essais` | le balayage des profils morts qui laisse ceux d'une autre vigie vivante ; un processus vivant reconnu ; le script de la page qui ne reçoit que le passage et n'ouvre aucun pont ; un profil que le moteur tient encore, confié à un processus de nettoyage qui le supprime |
+| `navigateur::essais` (seconde passe, 2026-10-29) | les cadres et les ressources jugés comme la navigation, le local limité à l'hôte et au port que Stone a vus ; une boîte posée sur la fenêtre par un autre processus refermée et la fenêtre rendue (une vraie boîte, son fil et sa pompe), celles de la vigie laissées ; la fenêtre inactive sans boîte rendue ; le blindage des sélecteurs de fichiers, de périphériques et de comptes ; Alt + flèche lu sur un évènement de confiance, `isTrusted` lu sur l'évènement ; la sonde qui lit le style calculé |
+| `passage::essais` (seconde passe) | un lien Markdown s'affiche par son titre et garde son adresse (titre vide : l'adresse s'affiche) ; un geste est un lien quand sa ligne l'est |
+| `plan::essais` (seconde passe) | une ligne de lien fait 24 pt aux quatre échelles, les autres gardent la leur |
+| `feuille::essais` (seconde passe) | l'en-tête de la page a Reculer et Avancer, Avancer grisé sans cible quand le moteur ne garde rien après, au même endroit ; l'extrait garde ce que la page vivante a répondu |
+| `feuille::essais` (suite) | le bandeau de la page suit la sonde (cité, non retrouvé, retrouvé après coup, moteur indisponible) et l'en-tête suit l'hôte réel de la page |
 | `catalogue::essais` (suite) | un chantier en cours qui se tait dix minutes se dit « muet depuis 10 min » et perd sa pastille ; à 9 min 59 s il est encore en cours ; un chantier fini n'est jamais muet |
 
 Les quatre essais de la barre ont été prouvés capables de tomber le
-2026-10-27 par sabotage (l'étroite
+2026-10-27 par `design/tours/tour-00/passage-b/artisan/saboter.sh` (l'étroite
 ignorée, le pas du mouvement réduit ignoré, « Direct » posé sous le bouton, le
 souvenir qui oublie le champ) : chacun tombe saboté et repasse rendu. Le juge
 technique les a refait tomber par d'autres sabotages, avec les deux essais
 venus de la console que ce registre ne citait pas (`les_encres_tiennent_leur_seuil`,
-`la_parole_se_lit_sans_balisage`), par un script
-qui ne compte une chute que si cargo dit `FAILED` pour cet essai. Les trois
-essais du correcteur (la copie, le creux du souffle, les chemins) tombent de
-même, et celui de sa seconde passe (le muet), avec la relance, aussi.
+`la_parole_se_lit_sans_balisage`), par
+`design/tours/tour-00/passage-b/juge-technique/saboter.sh`, qui ne compte une
+chute que si cargo dit `FAILED` pour cet essai. Les trois essais du correcteur
+(la copie, le creux du souffle, les chemins) tombent de même par
+`design/tours/tour-00/passage-b/correcteur/saboter.sh`, et celui de sa seconde
+passe (le muet), avec la relance, par
+`design/tours/tour-00/passage-b/correcteur-2/saboter.sh`.
 
 
 Chacun a été **prouvé capable de tomber** le 2026-10-03 : quatorze sabotages
@@ -736,15 +827,15 @@ majuscule de « Name » rendait le piège inopérant. Il pose désormais
 « filename », et tombe.
 
 Le chemin complet, de la souris et du clavier jusqu'au fil, a ses témoins en
-capture : `--onglet=<projet> --clic=400,365` touche la ligne d'un
-chantier fini (les coordonnées suivent la liste du moment) et rend son fil
-(« contre:07 », `<chantier> · fini`) ; `--touches=bas,bas,entree,retour`
+capture : `--onglet=atelier-e --clic=400,365` touche la ligne de
+`atelier-e-briques` (les coordonnées suivent la liste du moment) et rend son fil
+(« contre:07 », `atelier-e-briques · fini`) ; `--touches=bas,bas,entree,retour`
 suit le même chantier au clavier puis revient à la liste, son rail posé.
 
 Le clavier a aussi été vu **dans une vraie fenêtre**, le 2026-10-03 : des
 touches postées à la fenêtre d'essai (`target\release\vigie.exe`, jamais
 celle de `dist`), photographiée à chaque pas par `PrintWindow`. ↓ ↓ met
-ce chantier en évidence, Entrée le suit, Retour arrière revient à la
+`atelier-e-briques` en évidence, Entrée le suit, Retour arrière revient à la
 liste, → passe à l'onglet suivant, Début revient au Direct — et chaque pas se
 redessine sans attendre de bloc. C'était l'avant-dernier état du code, avant
 le tri par lancement, qui ne touche pas au clavier ; refait sur le dernier, le
@@ -760,27 +851,28 @@ L'absence d'un recours n'est pas une panne : on perd le grec, pas le texte.
 ## Ce qui a été vu, le 2026-10-27
 
 Sur trois chantiers du jour, par `--capture` (le même chemin de dessin que la
-fenêtre) :
+fenêtre), captures sous `captures/ouverture/` :
 
-- `design-de-l-application` (en cours, 5 agents) : sa page, 24
+- `design-de-l-application` (atelier-d, en cours, 5 agents) : sa page, 24
   images dont les vidéos manim et Wolfram ; un clic rejoué sur la vignette de
   `wolfram.mp4` ouvre le fil de `chercheur-forme` placé sur elle ; le fil de
   `chercheur-direction-artistique` montre `ArdoiseVirgule_pendant.png ·
   produite · 960 × 540` après la commande qui l'a rendue.
-- `apprendre-au-sommet` (7 agents) et un chantier de figures
+- `apprendre-au-sommet` (atelier-d, 7 agents) et `troncons-tome3-figures`
   (7 agents, 146 images, bilans structurés).
 
 Et dans une **vraie fenêtre**, lancée sans drapeau comme le raccourci, des
-touches postées et la fenêtre photographiée par `PrintWindow` à chaque pas :
-le direct suit `verificateur-adverse` ;
+touches postées et la fenêtre photographiée par `PrintWindow` à chaque pas
+(`captures/ouverture/fenetre/`) : le direct suit `verificateur-adverse` ;
 Retour arrière ouvre la page d'`apprendre-au-sommet` ; ↓ ↓ Entrée suit
 `chercheur-references-du-sujet` depuis son début ; Retour arrière revient à la
 page, sa ligne en évidence et son rail posé. Les photos sont rognées à droite :
 PowerShell n'est pas déclaré sensible à l'échelle, et `GetClientRect` lui rend
 la taille à 100 %.
 
-Puis à la **vraie souris**, dans la fenêtre du raccourci (`dist\Vigie.exe`) :
-un clic sur l'onglet du projet, un clic sur `design-de-l-application`, la molette sur la
+Puis à la **vraie souris**, dans la fenêtre du raccourci (`dist\Vigie.exe`),
+captures sous `captures/ouverture/souris/` : un clic sur l'onglet
+`atelier-d`, un clic sur `design-de-l-application`, la molette sur la
 planche, un clic sur la vignette `Ardoise_milieu.png` qui ouvre le fil de
 `chercheur-direction-artistique` placé sur elle, un clic sur l'image qui
 l'ouvre dans Photos (960 × 540), un clic sur le titre qui revient à la page,
@@ -804,20 +896,94 @@ multimédia.
   redimensionnement ou une fenêtre redevenue visible redessinent aussitôt :
   restaurée sur un chantier fini, elle s'affiche tout de suite.
 
-Puis l'**application installée**, le même jour :
+Puis l'**application installée**, le même jour (`captures/ouverture/app/`) :
 deux lancements de suite ne laissent qu'un processus ; fermée sur la page de
 `design-de-l-application`, elle s'y rouvre, à la même place et à la même
 taille.
 
+## L'icône et l'écran d'ouverture
+
+Stone, le 2026-10-29, au terme de neuf directions peintes, d'un arbitrage et de
+trois conseils de beauté (`design/icone/tour-01/DECISION.md`,
+`design/ouverture/toile-01/DECISION.md`) :
+
+> « en fait non la chambre noir elle est ultra belle » puis « et si pour l'icone
+> on garde la chambre noir genre dans le menu et tout mais la fenetre
+> d'ouverture c'est genre la fusion celeste d'avant » puis « L'état 5 ».
+
+- **L'icône est la chambre noire, partout** : l'exécutable (`assets/vigie.ico`,
+  compilé par `build.rs`), donc l'Explorateur, le menu Démarrer, les raccourcis ;
+  et la fenêtre elle-même, dont la barre de titre et la barre des tâches
+  reçoivent chacune l'icône à leur taille (16, 20, 24 ou 32 px pour la petite,
+  32, 40, 48 ou 64 px pour la grande, selon l'échelle de l'écran) : winit
+  charge chaque taille dans le `.ico`, sans réduire l'une pour l'autre. Le
+  `.ico` (15 tailles) vient de `design/icone/tour-01/partisan-chambre-noire/petite/final/`
+  (`construire_final.py`, avec son témoin) : le dessin fait à part jusqu'à 40 px,
+  la peinture réduite à partir de 48 px (règle de Stone : « Oui, on la garde »).
+  Vérifié en vrai : Windows répond à `WM_GETICON` pour la petite et la grande ;
+  l'icône que l'Explorateur extrait de l'exécutable est la nouvelle.
+- **L'écran d'ouverture** est la fusion céleste à son état 5, 3 840 × 2 400,
+  en JPEG dans l'exécutable (`assets/ouverture.jpg`, 1,9 Mo ; `src/ouverture.rs`).
+  Elle couvre toute la fenêtre, recadrée sans jamais se déformer (le soleil et
+  l'horizon sont au centre, ce que le recadrage de la fusion a tenu). Elle se
+  décode dans un fil à part (la fenêtre ne l'attend pas), avec ses réductions
+  de moitié en moitié : une fenêtre qui la montre plus petite ne crénelle pas.
+  Elle reste **au moins 1,5 s** (sinon une lecture de 200 ms la ferait
+  clignoter) et jusqu'à ce que le catalogue soit arrivé, puis s'efface sur le
+  ressort de la vigie ; **un clic ou une touche la passe** et ne fait rien
+  d'autre ; **sous « réduire les animations »** de Windows, elle disparaît d'un
+  coup dès que les données sont là. Six secondes au plus si les données ne
+  venaient jamais. Mesuré en vrai sur le temps réel : elle s'efface après
+  1,50 s, puis finit effacée.
+- **Une capture n'en montre pas** (les captures restent identiques) sauf
+  `--ouverture=o` (o de 0 à 1 : son opacité). `VIGIE_SANS_OUVERTURE=1` la coupe.
+- **Non vérifié** : l'ouverture vue par Stone sur son écran (4K réel, son
+  rendu d'un écran à l'autre) ; l'icône dans une vraie barre des tâches épinglée
+  (l'icône épinglée est celle de l'exécutable) ; la transition visible entre le
+  dessin (40 px) et la peinture réduite (48 px), qui change de ton (fond plus
+  crème, branches plus fines) : si elle gêne, on remonte la limite à 64 px.
+
+### La page d'un lien s'ouvre dans la vigie
+
+Le navigateur de la vigie (le passage d'abord, `design/navigateur/tour-01/`)
+ouvre la page d'un lien dans un moteur isolé (WebView2, profil InPrivate), avec
+la phrase citée surlignée. La règle de Stone s'applique au niveau du réseau :
+tout le trafic du moteur passe par un mandataire local (`src/mandataire.rs`) qui
+résout lui-même chaque nom, refuse toute adresse locale ou privée sauf l'hôte et
+le port que Stone a acceptés, ne suit aucune redirection et journalise ses refus.
+
+Après trois passes de correction, le juge indépendant de la troisième
+(`design/navigateur/tour-01/passage-b/juge-correction-3.md`) a rendu « fini » :
+zéro requête vers le service interdit sur 32 lancements (20 sur 20 fuyaient avec
+l'ancien exécutable), et des pages publiques réelles (MDN, Wikipedia,
+docs.expo.dev, une page à chargement tardif) s'ouvrent avec leur passage
+surligné. `VIGIE_SANS_PAGE=1` coupe l'ouverture de la page (« Ouvrir la page »
+le dit sur la feuille et n'ouvre rien).
+
+Défauts restants, non bloquants et dits : le jeton du mandataire peut fuir vers
+un défi d'authentification Basic ; le comportement « échec fermé » n'a pas
+d'essai ; `--disable-quic`, le chemin WebSocket permis, le rebond DNS et une
+page publique qui redirige vers le local n'ont pas été vus en vrai.
+
 ## Ce qui n'est pas fait
+
+- **Les liens, l'extrait et la page** (le 2026-10-29) : ce qui reste faux est
+  dans `design/navigateur/tour-01/passage-b/artisan.md` §6. En bref : le passage
+  est retrouvé sur 4 pages réelles sur 5 (la cinquième est dite « non retrouvée »,
+  jamais ouverte en silence), le clavier physique n'a pas été essayé dans la page
+  (seul `Échap`, par un évènement que la page s'envoie), `Reculer` dans la page
+  et les redirections réelles ne sont pas vus, un lien `javascript:` lancé
+  **par la page** s'exécute dans la page (le moteur ne le présente pas au
+  gardien), les bilans n'ont aucun lien cliquable, et la citation d'une parole
+  n'est pas lue.
 
 - **La barre n'a pas été vue dans une vraie fenêtre ni à la vraie souris.**
   Tout ce qui en est dit est rendu par `--capture`, qui pose chaque ressort
   sur sa cible : son mouvement, le bouton sous le vrai curseur et `Ctrl` + `B`
-  au vrai clavier ne sont pas vus.
+  au vrai clavier ne sont pas vus (`design/tours/tour-00/passage-b/artisan.md`).
 
-- **La visionneuse n'a pas été jugée par un tiers.** Elle a été vue
-  sur des captures (une image et une vidéo ouvertes depuis la planche,
+- **La visionneuse n'a pas été jugée par un tiers.** Captures sous
+  `captures/visionneuse/` (une image et une vidéo ouvertes depuis la planche,
   rendues par `--capture`, et la vraie fenêtre, où une vidéo se lisait déjà
   quand l'épreuve à la souris a commencé : quelqu'un s'en servait, et
   l'épreuve s'est arrêtée là pour ne pas lui prendre la main). Le son n'a été
@@ -844,8 +1010,8 @@ taille.
   longue planche : 146 vignettes à l'écran une fois chacune tiennent environ
   trente mégaoctets de carte, ce qui reste loin d'une limite.
 - **Le projet se devine, il ne se lit pas.** Un chantier dont aucun agent
-  n'est descendu dans un dépôt va au dossier personnel, comme un chantier
-  lancé depuis `.claude\projects`. Deux dépôts de
+  n'est descendu dans un dépôt va au dossier personnel : `vitrine-natif` y
+  est, et ce chantier-ci aussi, lancé depuis `.claude\projects`. Deux dépôts de
   même nom feraient un seul onglet.
 - **Le catalogue n'est pas gardé d'un lancement à l'autre.** Le premier
   parcours se refait à chaque démarrage ; à froid, il a pris 54 s, pendant
@@ -860,7 +1026,7 @@ taille.
   redimensionnement.
 - **Mille blocs au plus.** Les plus anciens sortent. C'est plus que ce qu'on
   relit, mais ce n'est pas une archive — l'archive, c'est
-  `outils/raisonnement.py`, dans le dépôt veilleuse.
+  `vitrine/outils/raisonnement.py`.
 - **Une image que rien ne nomme ne se voit pas.** Un script qui écrit vingt
   fichiers sans les imprimer n'en laisse aucun nom dans la transcription.
 - **La réflexion des agents est en anglais**, alors qu'ils écrivent leurs

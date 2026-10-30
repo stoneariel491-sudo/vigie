@@ -4,7 +4,7 @@
 struct Cadre {
     ecran: vec4<f32>,  // largeur, hauteur de l'ecran, en pixels
     boite: vec4<f32>,  // x, y, largeur, hauteur, en pixels
-    rayon: vec4<f32>,  // x = rayon des coins
+    rayon: vec4<f32>,  // x = rayon des coins, y = opacite de l'image (1 = pleine)
 }
 
 @group(0) @binding(0) var<uniform> cadre: Cadre;
@@ -57,5 +57,5 @@ fn fragment(e: Sortie) -> @location(0) vec4<f32> {
     let q = abs(e.local) - demi + vec2<f32>(r);
     let d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
     let dedans = 1.0 - smoothstep(-0.5, 0.5, d);
-    return vec4<f32>(c.rgb, c.a * dedans);
+    return vec4<f32>(c.rgb, c.a * dedans * cadre.rayon.y);
 }
