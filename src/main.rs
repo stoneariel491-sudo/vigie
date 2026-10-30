@@ -32,7 +32,12 @@ mod medias;
 mod palette;
 mod passage;
 mod feuille;
+#[cfg(windows)]
 mod mandataire;
+#[cfg(windows)]
+mod navigateur;
+#[cfg(not(windows))]
+#[path = "navigateur_autre.rs"]
 mod navigateur;
 mod ouverture;
 mod reseau;

@@ -33,7 +33,6 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 # l'environnement.
 # La page, au second geste seulement : WebView2 par wry, dans une fenetre enfant
 # de la fenetre winit (essai de design/navigateur/tour-01/essai).
-wry = "0.57"
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -47,6 +46,7 @@ windows-sys = { version = "0.61", features = [
 # Les gardiens des cadres et des ressources, et l'historique, sont des appels
 # du moteur que wry ne rend pas : ses propres dependances, aux memes versions
 # que celles de wry 0.57 (Cargo.lock ne bouge pas), nommees ici pour les appeler.
+wry = "0.57"
 webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_System_Com"] }
 
