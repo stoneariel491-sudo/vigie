@@ -318,7 +318,12 @@ print("ecrit", RACINE, "VIGIE_MAINTENANT =", int(FIN.timestamp()) + 20)
 # on les date comme la transcription, creation au premier geste, ecriture au dernier.
 import subprocess
 for d, debut, fin in DATES:
+    ecrit = datetime.strptime(fin, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).timestamp()
     for chemin in [d] + [os.path.join(d, n) for n in os.listdir(d)]:
+        if os.name != 'nt':
+            # Ailleurs que sous Windows, la date de creation ne se pose pas : celle d'ecriture suffit a dire en cours ou termine.
+            os.utime(chemin, (ecrit, ecrit))
+            continue
         ps = ("$i=Get-Item -LiteralPath '%s'; $i.CreationTimeUtc=[datetime]'%s'; $i.LastWriteTimeUtc=[datetime]'%s'"
               % (chemin, debut.replace("Z", ""), fin.replace("Z", "")))
         subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)

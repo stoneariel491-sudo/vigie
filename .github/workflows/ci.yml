@@ -19,14 +19,50 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    env:
+      VIGIE_MUET: "1"
+      VIGIE_MAINTENANT: "1793370620"
     steps:
       - uses: actions/checkout@v4
-      - name: Linux system libraries
+      - name: Linux: virtual display and software Vulkan
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libasound2-dev libxkbcommon-dev libwayland-dev libx11-dev
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libvulkan1 libxkbcommon-x11-0
       - name: Build
         run: cargo build --release
       - name: Test
         run: cargo test --release
+      - name: Demo data
+        shell: bash
+        run: |
+          python -m pip install --quiet pillow numpy
+          python demo/generer.py
+      - name: Render a real frame (Linux)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          export VIGIE_DONNEES="$PWD/demo/donnees"
+          xvfb-run -a -s "-screen 0 1600x1000x24" ./target/release/vigie --capture=shots/direct.png --echelle=1 --taille=1280x800 --attente=6
+      - name: Render a real frame (macOS)
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          export VIGIE_DONNEES="$PWD/demo/donnees"
+          ./target/release/vigie --capture=shots/direct.png --echelle=1 --taille=1280x800 --attente=6
+      - name: Render a real frame (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p shots
+          export VIGIE_DONNEES="$PWD/demo/donnees"
+          ./target/release/vigie.exe --capture=shots/direct.png --echelle=1 --taille=1280x800 --attente=6
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-${{ matrix.os }}
+          path: shots/
+          if-no-files-found: warn
