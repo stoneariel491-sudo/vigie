@@ -243,22 +243,22 @@ fn borner(s: &str, n: usize) -> String {
 
 fn kicker(etat: &Etat, verdict: Sonde) -> (&'static str, bool) {
     match (etat, verdict) {
-        (Etat::Passage(_) | Etat::Introuvable { .. }, Sonde::NonRetrouve) => return ("Passage non retrouvé dans la page", false),
-        (Etat::Introuvable { .. }, Sonde::Trouve) => return ("Passage retrouvé dans la page", false),
+        (Etat::Passage(_) | Etat::Introuvable { .. }, Sonde::NonRetrouve) => return (crate::langue::tr("Passage non retrouvé dans la page", "Passage not found in the page"), false),
+        (Etat::Introuvable { .. }, Sonde::Trouve) => return (crate::langue::tr("Passage retrouvé dans la page", "Passage found in the page"), false),
         _ => {}
     }
     match etat {
-        Etat::Chargement => ("Lecture de la page", false),
-        Etat::Passage(_) => ("Passage cité", false),
-        Etat::Introuvable { .. } => ("Passage introuvable sur cette page", false),
-        Etat::SansPassage { .. } => ("Aucun passage cité", false),
-        Etat::Echec(_) => ("La page ne s’ouvre pas", true),
-        Etat::HorsLigne => ("Pas de connexion", true),
-        Etat::Connexion => ("La page demande une connexion", true),
-        Etat::Fichier => ("Cette adresse est un fichier", true),
-        Etat::Refuse(_) => ("Lien refusé", true),
-        Etat::Local => ("Ce lien vise cet ordinateur", true),
-        Etat::HorsMaquette => ("Page non préparée", false),
+        Etat::Chargement => (crate::langue::tr("Lecture de la page", "Reading the page"), false),
+        Etat::Passage(_) => (crate::langue::tr("Passage cité", "Quoted passage"), false),
+        Etat::Introuvable { .. } => (crate::langue::tr("Passage introuvable sur cette page", "Passage not found on this page"), false),
+        Etat::SansPassage { .. } => (crate::langue::tr("Aucun passage cité", "No quoted passage"), false),
+        Etat::Echec(_) => (crate::langue::tr("La page ne s’ouvre pas", "The page does not open"), true),
+        Etat::HorsLigne => (crate::langue::tr("Pas de connexion", "No connection"), true),
+        Etat::Connexion => (crate::langue::tr("La page demande une connexion", "The page asks for a login"), true),
+        Etat::Fichier => (crate::langue::tr("Cette adresse est un fichier", "This address is a file"), true),
+        Etat::Refuse(_) => (crate::langue::tr("Lien refusé", "Link refused"), true),
+        Etat::Local => (crate::langue::tr("Ce lien vise cet ordinateur", "This link points to this computer"), true),
+        Etat::HorsMaquette => (crate::langue::tr("Page non préparée", "Page not prepared"), false),
         Etat::Redirection { contenu, .. } => kicker(contenu, verdict),
     }
 }
@@ -267,21 +267,21 @@ fn explication(etat: &Etat, hote: &str, ecoule: f32) -> Option<String> {
     Some(match etat {
         Etat::Chargement => {
             if ecoule >= SECONDE_LENTE {
-                format!("{hote} répond lentement. Rien n’est ouvert : la vigie ne demande que le texte de la page.")
+                crate::tf!("{hote} répond lentement. Rien n’est ouvert : la vigie ne demande que le texte de la page.", "{hote} is slow to answer. Nothing is open: Vigie only asks for the text of the page.")
             } else {
-                "La vigie demande le texte de la page, sans script ni cookie. Rien n’est ouvert.".to_string()
+                crate::langue::tr("La vigie demande le texte de la page, sans script ni cookie. Rien n’est ouvert.", "Vigie asks for the text of the page, with no script and no cookie. Nothing is open.").to_string()
             }
         }
-        Etat::Echec(Echec::Absente) => "La page n’existe plus à cette adresse (erreur 404). L’agent l’a lue avant : elle a pu changer ou disparaître.".to_string(),
-        Etat::Echec(Echec::Certificat) => format!("Le certificat de {hote} n’est pas valide. La vigie ne continue pas."),
-        Etat::Echec(Echec::Delai) => format!("{hote} n’a pas répondu en {SECONDE_LENTE:.0} s."),
-        Etat::Echec(Echec::Serveur(c)) => format!("{hote} a répondu {c} au lieu d’une page. L’agent l’a lue avant : elle a pu changer ou se fermer."),
-        Etat::HorsLigne => "Cet ordinateur n’a pas de connexion. Rien n’a été chargé.".to_string(),
-        Etat::Connexion => "Cette page exige un compte. La vigie n’en a aucun de vous et ne se connecte pas.".to_string(),
-        Etat::Fichier => "Cette adresse envoie un fichier (PDF, archive ou programme). La vigie ne télécharge rien.".to_string(),
-        Etat::Refuse(s) => format!("Le schéma « {s}: » n’est jamais ouvert par la vigie, quelle que soit la page qui le cite."),
-        Etat::Local => format!("Cette adresse vise un service de votre propre machine ({hote}). La vigie demande avant de l’ouvrir."),
-        Etat::HorsMaquette => "Cette adresse n’est pas parmi les pages préparées pour la maquette. Au clic, la vigie lirait ici son texte.".to_string(),
+        Etat::Echec(Echec::Absente) => crate::langue::tr("La page n’existe plus à cette adresse (erreur 404). L’agent l’a lue avant : elle a pu changer ou disparaître.", "The page no longer exists at this address (error 404). The agent read it earlier: it may have changed or disappeared.").to_string(),
+        Etat::Echec(Echec::Certificat) => crate::tf!("Le certificat de {hote} n’est pas valide. La vigie ne continue pas.", "The certificate of {hote} is not valid. Vigie does not go on."),
+        Etat::Echec(Echec::Delai) => crate::tf!("{hote} n’a pas répondu en {SECONDE_LENTE:.0} s.", "{hote} did not answer within {SECONDE_LENTE:.0} s."),
+        Etat::Echec(Echec::Serveur(c)) => crate::tf!("{hote} a répondu {c} au lieu d’une page. L’agent l’a lue avant : elle a pu changer ou se fermer.", "{hote} answered {c} instead of a page. The agent read it earlier: it may have changed or closed."),
+        Etat::HorsLigne => crate::langue::tr("Cet ordinateur n’a pas de connexion. Rien n’a été chargé.", "This computer has no connection. Nothing was loaded.").to_string(),
+        Etat::Connexion => crate::langue::tr("Cette page exige un compte. La vigie n’en a aucun de vous et ne se connecte pas.", "This page requires an account. Vigie has none of yours and does not log in.").to_string(),
+        Etat::Fichier => crate::langue::tr("Cette adresse envoie un fichier (PDF, archive ou programme). La vigie ne télécharge rien.", "This address sends a file (PDF, archive or program). Vigie downloads nothing.").to_string(),
+        Etat::Refuse(s) => crate::tf!("Le schéma « {s}: » n’est jamais ouvert par la vigie, quelle que soit la page qui le cite.", "Vigie never opens the “{s}:” scheme, whatever page cites it."),
+        Etat::Local => crate::tf!("Cette adresse vise un service de votre propre machine ({hote}). La vigie demande avant de l’ouvrir.", "This address points to a service on your own machine ({hote}). Vigie asks before opening it."),
+        Etat::HorsMaquette => crate::langue::tr("Cette adresse n’est pas parmi les pages préparées pour la maquette. Au clic, la vigie lirait ici son texte.", "This address is not among the pages prepared for the mockup. On click, Vigie would read its text here.").to_string(),
         _ => return None,
     })
 }
@@ -316,10 +316,10 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     let (b_tete, l_tete) = mesurer(c.systeme, tete, REPERE * e, REPERE_H * e, Weight::MEDIUM);
     c.textes.push(Texte { tampon: b_tete, x: ix, y: ty, couleur: couleur_tete });
     if classe == Classe::NonChiffre {
-        let (b, _) = mesurer(c.systeme, "non chiffré", REPERE * e, REPERE_H * e, Weight::MEDIUM);
+        let (b, _) = mesurer(c.systeme, crate::langue::tr("non chiffré", "not encrypted"), REPERE * e, REPERE_H * e, Weight::MEDIUM);
         c.textes.push(Texte { tampon: b, x: ix + l_tete + 14.0 * e, y: ty, couleur: palette::alerte() });
     }
-    let (b_esc, l_esc) = mesurer(c.systeme, "Échap", PETIT * e, PETIT_H * e, Weight::NORMAL);
+    let (b_esc, l_esc) = mesurer(c.systeme, crate::langue::tr("Échap", "Esc"), PETIT * e, PETIT_H * e, Weight::NORMAL);
     let fermer = Boite { x: ix + iw - BOUTON * e, y, l: BOUTON * e, h: BOUTON * e };
     let (b_x, l_x) = mesurer(c.systeme, "×", GRAND * e, GRAND_H * e, Weight::NORMAL);
     c.textes.push(Texte { tampon: b_x, x: fermer.x + (fermer.l - l_x) * 0.5, y: y + (BOUTON * e - GRAND_H * e) * 0.5, couleur: palette::encre2() });
@@ -342,7 +342,7 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     y += LECTURE_H * e;
     if a.trompeuse {
         y += 2.0 * e;
-        let mot = if a.info.is_empty() { "Écriture trompeuse : l’hôte ci-dessus est celui qui répond." } else { "Écriture trompeuse : seul ce qui suit @ répond, ce qui précède n’est qu’un nom." };
+        let mot = if a.info.is_empty() { crate::langue::tr("Écriture trompeuse : l’hôte ci-dessus est celui qui répond.", "Misleading spelling: the host above is the one that answers.") } else { crate::langue::tr("Écriture trompeuse : seul ce qui suit @ répond, ce qui précède n’est qu’un nom.", "Misleading spelling: only what follows @ answers; what comes before is just a name.") };
         y += c.texte(mot, REPERE, REPERE_H, Weight::NORMAL, palette::alerte(), y);
         // L'adresse entiere, telle qu'envoyee, avec ce qui precede l'arobase.
         let brute = if a.info.is_empty() { a.hote.clone() } else { format!("{}@{}", a.info, a.hote) };
@@ -368,7 +368,7 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     // Une redirection se dit avant ce qu'on lit : de qui vient le texte.
     let mut etat = entree.etat;
     if let Etat::Redirection { vers, contenu } = entree.etat {
-        y += c.texte(&format!("Cette adresse renvoie vers {vers} : le texte ci-dessous vient de là."), REPERE, REPERE_H, Weight::MEDIUM, palette::encre1(), y);
+        y += c.texte(&crate::tf!("Cette adresse renvoie vers {vers} : le texte ci-dessous vient de là.", "This address redirects to {vers}: the text below comes from there."), REPERE, REPERE_H, Weight::MEDIUM, palette::encre1(), y);
         y += 10.0 * e;
         etat = contenu;
     }
@@ -380,29 +380,29 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
         }
         Etat::Introuvable { citation, debut_page } => {
             let ligne = if entree.verdict == Sonde::Trouve {
-                "Le texte lu sans script ne contenait pas le passage ; la page ouverte l’a montré."
+                crate::langue::tr("Le texte lu sans script ne contenait pas le passage ; la page ouverte l’a montré.", "The text read without script did not contain the passage; the open page showed it.")
             } else {
-                "Le texte que l’agent avait cité n’est pas dans la page d’aujourd’hui."
+                crate::langue::tr("Le texte que l’agent avait cité n’est pas dans la page d’aujourd’hui.", "The text the agent had quoted is not in today’s page.")
             };
             y += c.texte(ligne, LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
             y += 12.0 * e;
             y = citation_non_verifiee(&mut c, citation, y);
             if !debut_page.is_empty() {
                 y += 14.0 * e;
-                y += c.texte("Début de la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+                y += c.texte(crate::langue::tr("Début de la page", "Start of the page"), REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
                 y += c.texte(&borner(debut_page, 200), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
             }
         }
         Etat::SansPassage { debut_page } => {
             if let Some(p) = entree.page.filter(|p| !p.invite.is_empty()) {
-                y += c.texte("Ce que l’agent demandait à la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+                y += c.texte(crate::langue::tr("Ce que l’agent demandait à la page", "What the agent asked of the page"), REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
                 y += c.texte(&borner(&p.invite, 260), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre1(), y);
                 y += 14.0 * e;
             }
-            y += c.texte("Il n’a cité aucun passage : la page s’ouvrirait en haut.", LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
+            y += c.texte(crate::langue::tr("Il n’a cité aucun passage : la page s’ouvrirait en haut.", "It quoted no passage: the page would open at the top."), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
             if !debut_page.is_empty() {
                 y += 14.0 * e;
-                y += c.texte("Début de la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+                y += c.texte(crate::langue::tr("Début de la page", "Start of the page"), REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
                 y += c.texte(&borner(debut_page, 200), LECTURE, LECTURE_H, Weight::NORMAL, palette::encre2(), y);
             }
         }
@@ -429,10 +429,10 @@ fn composer_passage(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e
     // Une phrase sur ce que la vigie a lu, quand elle a lu quelque chose.
     if matches!(etat, Etat::Passage(_) | Etat::Introuvable { .. } | Etat::SansPassage { .. }) {
         let rel = entree.page.map(|p| p.releve.as_str()).filter(|r| !r.is_empty());
-        let fin = if entree.verdict == Sonde::NonRetrouve { "La page ouverte ne l’a pas montré." } else { "La page n’est pas ouverte." };
+        let fin = if entree.verdict == Sonde::NonRetrouve { crate::langue::tr("La page ouverte ne l’a pas montré.", "The open page did not show it.") } else { crate::langue::tr("La page n’est pas ouverte.", "The page is not open.") };
         let t = match rel {
-            Some(r) => format!("Texte lu sans script ni cookie, le {}. {fin}", date_fr(r)),
-            None => format!("Texte lu sans script ni cookie. {fin}"),
+            Some(r) => crate::tf!("Texte lu sans script ni cookie, le {}. {fin}", "Text read without script or cookie, on {}. {fin}", date_fr(r)),
+            None => crate::tf!("Texte lu sans script ni cookie. {fin}", "Text read without script or cookie. {fin}"),
         };
         y += 16.0 * e;
         y += c.texte(&t, PETIT, PETIT_H, Weight::NORMAL, palette::encre3(), y);
@@ -505,7 +505,7 @@ fn demande(c: &mut Corps, invite: &str, mut y: f32) -> f32 {
         return y;
     }
     y += 14.0 * c.e;
-    y += c.texte("Ce que l’agent demandait à la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+    y += c.texte(crate::langue::tr("Ce que l’agent demandait à la page", "What the agent asked of the page"), REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
     y += c.texte(&borner(&passage::une_ligne_de(invite), 190), REPERE, REPERE_H + 2.0, Weight::NORMAL, palette::encre2(), y);
     y
 }
@@ -559,7 +559,7 @@ fn corps_du_passage(c: &mut Corps, x: &Extrait, mut y: f32, surbrillance: &mut V
     y += bloc.h;
     if x.trouve == Trouve::Debut {
         y += 6.0 * e;
-        y += c.texte("Seul le début de la citation est dans la page.", REPERE, REPERE_H, Weight::NORMAL, palette::encre3(), y);
+        y += c.texte(crate::langue::tr("Seul le début de la citation est dans la page.", "Only the start of the quotation is in the page."), REPERE, REPERE_H, Weight::NORMAL, palette::encre3(), y);
     }
     if !x.apres.is_empty() {
         y += 10.0 * e;
@@ -573,7 +573,7 @@ fn corps_du_passage(c: &mut Corps, x: &Extrait, mut y: f32, surbrillance: &mut V
 /// jamais l'ambre, qui ne dit que « retrouve dans la page ».
 fn citation_non_verifiee(c: &mut Corps, citation: &str, mut y: f32) -> f32 {
     let e = c.e;
-    y += c.texte("Cité par l’agent, d’après sa transcription, non vérifié dans la page", REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
+    y += c.texte(crate::langue::tr("Cité par l’agent, d’après sa transcription, non vérifié dans la page", "Quoted by the agent, from its transcript, not verified in the page"), REPERE, REPERE_H, Weight::MEDIUM, palette::encre3(), y);
     y += 4.0 * e;
     let (b, h) = poser_bloc(c.systeme, &borner(citation, 400), LECTURE * e, LECTURE_H * e, Weight::NORMAL, c.l - 16.0 * e);
     c.aplats.push(forme([c.x, y, 2.0 * e, h], palette::encre3(), 1.0, e));
@@ -582,15 +582,15 @@ fn citation_non_verifiee(c: &mut Corps, citation: &str, mut y: f32) -> f32 {
 }
 
 fn actions_de(etat: &Etat, ecoule: f32) -> Vec<(&'static str, Action, bool)> {
-    let fermer = ("Fermer", Action::Fermer, false);
+    let fermer = (crate::langue::tr("Fermer", "Close"), Action::Fermer, false);
     match etat {
-        Etat::Passage(_) | Etat::Introuvable { .. } | Etat::SansPassage { .. } => vec![fermer, ("Ouvrir la page", Action::OuvrirPage, true)],
+        Etat::Passage(_) | Etat::Introuvable { .. } | Etat::SansPassage { .. } => vec![fermer, (crate::langue::tr("Ouvrir la page", "Open the page"), Action::OuvrirPage, true)],
         Etat::Redirection { contenu, .. } => actions_de(contenu, ecoule),
-        Etat::Chargement if ecoule >= SECONDE_LENTE => vec![("Annuler", Action::Fermer, false), ("Réessayer", Action::Reessayer, true)],
-        Etat::Chargement => vec![("Annuler", Action::Fermer, false)],
-        Etat::Echec(Echec::Delai) | Etat::HorsLigne => vec![fermer, ("Réessayer", Action::Reessayer, true)],
-        Etat::Fichier => vec![fermer, ("Ouvrir ailleurs", Action::OuvrirAilleurs, false)],
-        Etat::Local => vec![fermer, ("Ouvrir quand même", Action::ConfirmerLocal, true)],
+        Etat::Chargement if ecoule >= SECONDE_LENTE => vec![(crate::langue::tr("Annuler", "Cancel"), Action::Fermer, false), (crate::langue::tr("Réessayer", "Retry"), Action::Reessayer, true)],
+        Etat::Chargement => vec![(crate::langue::tr("Annuler", "Cancel"), Action::Fermer, false)],
+        Etat::Echec(Echec::Delai) | Etat::HorsLigne => vec![fermer, (crate::langue::tr("Réessayer", "Retry"), Action::Reessayer, true)],
+        Etat::Fichier => vec![fermer, (crate::langue::tr("Ouvrir ailleurs", "Open elsewhere"), Action::OuvrirAilleurs, false)],
+        Etat::Local => vec![fermer, (crate::langue::tr("Ouvrir quand même", "Open anyway"), Action::ConfirmerLocal, true)],
         _ => vec![fermer],
     }
 }
@@ -605,10 +605,13 @@ pub fn reessai(etat: &Etat, ecoule: f32) -> Option<Action> {
     actions_de(etat, ecoule).into_iter().find(|(_, a, _)| *a == Action::Reessayer).map(|(_, a, _)| a)
 }
 
+const MOIS_EN: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 fn date_fr(iso: &str) -> String {
     const MOIS: [&str; 12] = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
     let p: Vec<&str> = iso.split('-').collect();
     match (p.first(), p.get(1).and_then(|m| m.parse::<usize>().ok()), p.get(2).and_then(|d| d.parse::<u32>().ok())) {
+        (Some(a), Some(m @ 1..=12), Some(d)) if !crate::langue::fr() => format!("{} {d}, {a}", MOIS_EN[m - 1]),
         (Some(a), Some(m @ 1..=12), Some(d)) => format!("{} {} {}", if d == 1 { "1er".to_string() } else { d.to_string() }, MOIS[m - 1], a),
         _ => iso.to_string(),
     }
@@ -645,7 +648,7 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     }
     cibles.push((ferme, Action::Fermer));
     let x0 = avance.x + avance.l + 14.0 * e;
-    let (b_esc, l_esc) = mesurer(systeme, "Échap", PETIT * e, PETIT_H * e, Weight::NORMAL);
+    let (b_esc, l_esc) = mesurer(systeme, crate::langue::tr("Échap", "Esc"), PETIT * e, PETIT_H * e, Weight::NORMAL);
     textes.push(Texte { tampon: b_esc, x: ferme.x - 8.0 * e - l_esc, y: by + (BOUTON * e - PETIT_H * e) * 0.5, couleur: palette::encre3() });
     let dispo = (ferme.x - 8.0 * e - l_esc - 14.0 * e - x0).max(40.0 * e);
     let (b_hote, l_hote) = mesurer(systeme, &sans_trait_fondu(&a.hote), LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
@@ -665,21 +668,21 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     let plaque = aplats.len();
     aplats.push(forme([0.0, entete_h, l, bandeau_h], palette::plaque(), 1.0, 0.0));
     let (mot, citation, couleur_mot) = match entree.etat {
-        Etat::Passage(x) => ("Passage cité", Some(x.passage.clone()), palette::encre1()),
-        Etat::Introuvable { citation, .. } => ("Passage introuvable sur cette page", Some(citation.clone()), palette::encre1()),
-        Etat::SansPassage { .. } => ("Aucun passage cité", entree.page.map(|p| p.invite.clone()).filter(|s| !s.is_empty()), palette::encre1()),
+        Etat::Passage(x) => (crate::langue::tr("Passage cité", "Quoted passage"), Some(x.passage.clone()), palette::encre1()),
+        Etat::Introuvable { citation, .. } => (crate::langue::tr("Passage introuvable sur cette page", "Passage not found on this page"), Some(citation.clone()), palette::encre1()),
+        Etat::SansPassage { .. } => (crate::langue::tr("Aucun passage cité", "No quoted passage"), entree.page.map(|p| p.invite.clone()).filter(|s| !s.is_empty()), palette::encre1()),
         Etat::Redirection { contenu, .. } => match &**contenu {
-            Etat::Passage(x) => ("Passage cité", Some(x.passage.clone()), palette::encre1()),
-            _ => ("Redirigée", None, palette::encre1()),
+            Etat::Passage(x) => (crate::langue::tr("Passage cité", "Quoted passage"), Some(x.passage.clone()), palette::encre1()),
+            _ => (crate::langue::tr("Redirigée", "Redirected"), None, palette::encre1()),
         },
         _ => ("Page", None, palette::encre1()),
     };
     let mot = match (entree.sonde, passage::etat_de_fond(entree.etat)) {
-        (Sonde::NonRetrouve, Etat::Passage(_) | Etat::Introuvable { .. }) => "Passage non retrouvé dans la page",
+        (Sonde::NonRetrouve, Etat::Passage(_) | Etat::Introuvable { .. }) => crate::langue::tr("Passage non retrouvé dans la page", "Passage not found in the page"),
         // Absent du texte lu sans script, mais la page vivante l'avait, apres son chargement.
-        (Sonde::Trouve, Etat::Introuvable { .. }) => "Passage retrouvé dans la page",
-        (Sonde::Indisponible, _) if !crate::navigateur::page_activee() => "Le moteur de pages est désactivé",
-        (Sonde::Indisponible, _) => "Le moteur de pages n’a pas démarré",
+        (Sonde::Trouve, Etat::Introuvable { .. }) => crate::langue::tr("Passage retrouvé dans la page", "Passage found in the page"),
+        (Sonde::Indisponible, _) if !crate::navigateur::page_activee() => crate::langue::tr("Le moteur de pages est désactivé", "The page engine is turned off or unavailable here"),
+        (Sonde::Indisponible, _) => crate::langue::tr("Le moteur de pages n’a pas démarré", "The page engine did not start"),
         _ => mot,
     };
     let (b_mot, l_mot) = mesurer(systeme, mot, REPERE * e, REPERE_H * e, Weight::MEDIUM);
@@ -692,7 +695,7 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
         x += 16.0 * e;
     }
     textes.push(Texte { tampon: b_mot, x, y: ty, couleur: couleur_mot });
-    let revoir_t = "Revoir le passage";
+    let revoir_t = crate::langue::tr("Revoir le passage", "Review the passage");
     let (b_rev, l_rev) = mesurer(systeme, revoir_t, REPERE * e, REPERE_H * e, Weight::MEDIUM);
     let revoir = Boite { x: l - gut - l_rev - 24.0 * e, y: entete_h + (bandeau_h - BOUTON * e) * 0.5, l: l_rev + 24.0 * e, h: BOUTON * e };
     aplats.push(forme([revoir.x, revoir.y, revoir.l, revoir.h], palette::filet(), 1.0, 7.0 * e));
@@ -703,11 +706,11 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
         let debut = x + l_mot + 12.0 * e;
         let largeur = (revoir.x - 14.0 * e - debut).max(0.0);
         if largeur >= LARGEUR_CITATION_MIN * e {
-            let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &format!("« {} »", cit), largeur);
+            let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &crate::tf!("« {} »", "“{}”", cit), largeur);
             textes.push(Texte { tampon: b, x: debut, y: ty, couleur: palette::encre2() });
         } else if l - 2.0 * gut > 60.0 * e {
             let seconde = entete_h + bandeau_h - 6.0 * e;
-            let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &format!("« {} »", cit), l - 2.0 * gut);
+            let (b, _) = vues::une_ligne(systeme, Metrics::new(REPERE * e, REPERE_H * e), &barlow(Weight::NORMAL), &crate::tf!("« {} »", "“{}”", cit), l - 2.0 * gut);
             textes.push(Texte { tampon: b, x: gut, y: seconde, couleur: palette::encre2() });
             bandeau_h += REPERE_H * e + 4.0 * e;
             aplats[plaque] = forme([0.0, entete_h, l, bandeau_h], palette::plaque(), 1.0, 0.0);
@@ -720,18 +723,18 @@ fn composer_page(systeme: &mut FontSystem, entree: &Entree, l: f32, h: f32, e: f
     let zone = Boite { x: 0.0, y: haut_page, l, h: h - haut_page };
     aplats.push(forme([zone.x, zone.y, zone.l, zone.h], Color::rgb(0x9A, 0x98, 0x93), 1.0, 0.0));
     let sombre = Color::rgb(0x1A, 0x1A, 0x1A);
-    let titre_zone = if entree.sonde == Sonde::Indisponible { "La page ne peut pas s’afficher" } else { "La page s’affiche ici" };
+    let titre_zone = if entree.sonde == Sonde::Indisponible { crate::langue::tr("La page ne peut pas s’afficher", "The page cannot be shown") } else { crate::langue::tr("La page s’affiche ici", "The page shows here") };
     let (b1, l1) = mesurer(systeme, titre_zone, LECTURE * e, LECTURE_H * e, Weight::MEDIUM);
     let pied_zone = if entree.sonde == Sonde::Indisponible && !crate::navigateur::page_activee() {
-        "L’ouverture de la page est coupée (VIGIE_SANS_PAGE). Rien n’a été ouvert."
+        crate::langue::tr("L’ouverture de la page est coupée (VIGIE_SANS_PAGE). Rien n’a été ouvert.", "Opening the page is turned off or unavailable on this system. Nothing was opened.")
     } else if entree.sonde == Sonde::Indisponible {
-        "Le moteur de pages de Windows (WebView2) n’a pas démarré. Rien n’a été ouvert."
+        crate::langue::tr("Le moteur de pages de Windows (WebView2) n’a pas démarré. Rien n’a été ouvert.", "The Windows page engine (WebView2) did not start. Nothing was opened.")
     } else {
-        "Fenêtre native de la page : la capture de la vigie ne la montre pas."
+        crate::langue::tr("Fenêtre native de la page : la capture de la vigie ne la montre pas.", "Native page window: Vigie's capture does not show it.")
     };
     let (b2, l2) = mesurer(systeme, pied_zone, REPERE * e, REPERE_H * e, Weight::NORMAL);
     let (b3, l3) = if etroite {
-        mesurer(systeme, if entree.sonde == Sonde::Indisponible && !crate::navigateur::page_activee() { "Page désactivée." } else if entree.sonde == Sonde::Indisponible { "WebView2 n’a pas démarré." } else { "Fenêtre native, hors capture." }, REPERE * e, REPERE_H * e, Weight::NORMAL)
+        mesurer(systeme, if entree.sonde == Sonde::Indisponible && !crate::navigateur::page_activee() { crate::langue::tr("Page désactivée.", "Page turned off.") } else if entree.sonde == Sonde::Indisponible { crate::langue::tr("WebView2 n’a pas démarré.", "WebView2 did not start.") } else { crate::langue::tr("Fenêtre native, hors capture.", "Native window, not in the capture.") }, REPERE * e, REPERE_H * e, Weight::NORMAL)
     } else {
         (b2, l2)
     };
@@ -1076,4 +1079,16 @@ mod essais {
         assert!(a_un(&v, "autre.example.org") && !a_un(&v, "docs.expo.dev"), "{v:?}");
     }
 
+    #[test]
+    fn les_titres_et_les_boutons_de_la_feuille_suivent_la_langue() {
+        use crate::langue::{avec, Langue};
+        let (titre_en, _) = avec(Langue::En, || kicker(&Etat::HorsLigne, Sonde::Attente));
+        let (titre_fr, _) = avec(Langue::Fr, || kicker(&Etat::HorsLigne, Sonde::Attente));
+        assert_eq!((titre_en, titre_fr), ("No connection", "Pas de connexion"));
+        let boutons = |l| avec(l, || actions_de(&Etat::Local, 0.0).into_iter().map(|(m, _, _)| m).collect::<Vec<_>>());
+        assert_eq!(boutons(Langue::En), vec!["Close", "Open anyway"]);
+        assert_eq!(boutons(Langue::Fr), vec!["Fermer", "Ouvrir quand même"]);
+        assert_eq!(avec(Langue::En, || date_fr("2026-10-01")), "October 1, 2026");
+        assert_eq!(avec(Langue::Fr, || date_fr("2026-10-01")), "1er octobre 2026");
+    }
 }

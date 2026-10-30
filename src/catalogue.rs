@@ -100,9 +100,9 @@ pub enum Etat {
 impl Etat {
     pub fn mot(self) -> &'static str {
         match self {
-            Etat::EnCours => "en cours",
-            Etat::Fini => "fini",
-            Etat::Interrompu => "interrompu",
+            Etat::EnCours => crate::langue::tr("en cours", "running"),
+            Etat::Fini => crate::langue::tr("fini", "finished"),
+            Etat::Interrompu => crate::langue::tr("interrompu", "interrupted"),
         }
     }
 }
@@ -142,7 +142,7 @@ impl Chantier {
     /// Ce que l'etat dit en un mot ; « muet depuis 12 min » quand il l'est.
     pub fn mot(&self, maintenant: SystemTime) -> String {
         match self.muet(maintenant) {
-            Some(d) => format!("muet depuis {} min", d.as_secs() / 60),
+            Some(d) => crate::tf!("muet depuis {} min", "silent for {} min", d.as_secs() / 60),
             None => self.etat.mot().to_string(),
         }
     }
@@ -1038,5 +1038,14 @@ mod essais_garde {
         let autre = String::from_utf8(m.en_octets().unwrap()).unwrap().replacen("\"version\":1", "\"version\":0", 1);
         assert!(Memoire::depuis(autre.as_bytes()).is_none());
         assert!(Memoire::depuis(b"{tronque").is_none());
+    }
+
+    #[test]
+    fn l_etat_se_dit_dans_la_langue_courante() {
+        use crate::langue::{avec, Langue};
+        assert_eq!(avec(Langue::En, || Etat::EnCours.mot()), "running");
+        assert_eq!(avec(Langue::En, || Etat::Fini.mot()), "finished");
+        assert_eq!(avec(Langue::En, || Etat::Interrompu.mot()), "interrupted");
+        assert_eq!(avec(Langue::Fr, || Etat::EnCours.mot()), "en cours");
     }
 }

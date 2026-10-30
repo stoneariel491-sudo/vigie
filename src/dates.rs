@@ -9,6 +9,11 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const JOURS: [&str; 7] = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+const JOURS_EN: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MOIS_EN: [&str; 12] = [
+    "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+    "November", "December",
+];
 const MOIS: [&str; 12] = [
     "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
     "novembre", "décembre",
@@ -74,11 +79,19 @@ pub fn heure(minute: u32) -> String {
 /// ne s'ecrit que si ce n'est pas celle d'aujourd'hui.
 pub fn libelle_jour(jour: i64, aujourdhui: i64) -> String {
     match aujourdhui - jour {
-        0 => return "Aujourd’hui".to_string(),
-        1 => return "Hier".to_string(),
+        0 => return crate::langue::tr("Aujourd’hui", "Today").to_string(),
+        1 => return crate::langue::tr("Hier", "Yesterday").to_string(),
         _ => {}
     }
     let (a, m, j) = civil(jour);
+    if !crate::langue::fr() {
+        // « Thursday, October 1 », puis l'annee si ce n'est pas celle d'aujourd'hui.
+        let mut s = format!("{}, {} {j}", JOURS_EN[(jour + 3).rem_euclid(7) as usize], MOIS_EN[(m - 1) as usize]);
+        if a != civil(aujourdhui).0 {
+            s.push_str(&format!(", {a}"));
+        }
+        return s;
+    }
     // Le 1er janvier 1970 etait un jeudi.
     let nom = JOURS[(jour + 3).rem_euclid(7) as usize];
     let quantieme = if j == 1 { "1er".to_string() } else { j.to_string() };
@@ -136,5 +149,17 @@ mod essais {
     fn l_heure_courte() {
         assert_eq!(heure(69), "01:09");
         assert_eq!(heure(23 * 60 + 59), "23:59");
+    }
+
+    #[test]
+    fn les_titres_de_jour_se_disent_dans_la_langue_courante() {
+        use crate::langue::{avec, Langue};
+        let aujourdhui = jours_depuis_1970(2026, 10, 3);
+        let jeudi_1er = jours_depuis_1970(2026, 10, 1);
+        assert_eq!(avec(Langue::En, || libelle_jour(aujourdhui, aujourdhui)), "Today");
+        assert_eq!(avec(Langue::En, || libelle_jour(aujourdhui - 1, aujourdhui)), "Yesterday");
+        assert_eq!(avec(Langue::En, || libelle_jour(jeudi_1er, aujourdhui)), "Thursday, October 1");
+        assert_eq!(avec(Langue::En, || libelle_jour(jours_depuis_1970(2025, 12, 31), aujourdhui)), "Wednesday, December 31, 2025");
+        assert_eq!(avec(Langue::Fr, || libelle_jour(jeudi_1er, aujourdhui)), "Jeudi 1er octobre");
     }
 }

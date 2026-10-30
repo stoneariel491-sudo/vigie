@@ -83,7 +83,8 @@ impl Image {
 
     /// « vidéo de 3 s » ou « son de 3 s ».
     pub fn mention_duree(&self, d: f32) -> String {
-        format!("{} de {}", if self.est_audio() { "son" } else { "vidéo" }, duree(d))
+        let (mot_son, mot_video) = (crate::langue::tr("son", "sound"), crate::langue::tr("vidéo", "video"));
+        format!("{} {} {}", if self.est_audio() { mot_son } else { mot_video }, crate::langue::tr("de", "of"), duree(d))
     }
 
     /// Le nom du fichier, ou rien pour une image sans fichier connu.
@@ -124,11 +125,11 @@ pub fn duree(secondes: f32) -> String {
 /// La legende d'une image dans le fil : son nom, comment elle y est entree,
 /// et sa taille d'origine. « planche.png  ·  produite  ·  2000 × 640 ».
 pub fn legende(img: &Image) -> String {
-    let nom = img.nom().unwrap_or_else(|| "image reçue".to_string());
+    let nom = img.nom().unwrap_or_else(|| crate::langue::tr("image reçue", "image received").to_string());
     let comment = match (img.origine, img.video) {
         (_, Some(d)) => img.mention_duree(d),
-        (Origine::Produite, None) => "produite".to_string(),
-        (Origine::Regardee, None) => "ouverte".to_string(),
+        (Origine::Produite, None) => crate::langue::tr("produite", "produced").to_string(),
+        (Origine::Regardee, None) => crate::langue::tr("ouverte", "opened").to_string(),
     };
     if img.est_audio() {
         return format!("{nom}  ·  {comment}");
@@ -140,8 +141,8 @@ pub fn legende(img: &Image) -> String {
 pub fn legende_courte(img: &Image) -> String {
     let comment = match (img.origine, img.video) {
         (_, Some(d)) => img.mention_duree(d),
-        (Origine::Produite, None) => "produite".to_string(),
-        (Origine::Regardee, None) => "ouverte".to_string(),
+        (Origine::Produite, None) => crate::langue::tr("produite", "produced").to_string(),
+        (Origine::Regardee, None) => crate::langue::tr("ouverte", "opened").to_string(),
     };
     if img.est_audio() {
         return comment;

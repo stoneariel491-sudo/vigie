@@ -25,6 +25,7 @@ mod app;
 mod catalogue;
 mod chantier;
 mod import;
+mod langue;
 mod dates;
 mod formes;
 mod images;
@@ -734,7 +735,7 @@ impl Vigie {
             let r = (JOINTE_L * e / il).min(JOINTE_H * e / ih).min(e * img.source.0.max(1) as f32 / il);
             let (l, h) = ((il * r).round().max(1.0), (ih * r).round().max(1.0));
             let texte_l = (m.colonne - (JOINTE_L + JOINTE_TEXTE) * e).max(40.0 * e);
-            let nom = img.nom().unwrap_or_else(|| "image reçue".to_string());
+            let nom = img.nom().unwrap_or_else(|| crate::langue::tr("image reçue", "image received").to_string());
             let (nom_b, _) = vues::une_ligne(
                 &mut self.systeme,
                 Metrics::new(m.corps, m.interligne),
@@ -779,7 +780,7 @@ impl Vigie {
                 (VERBE_L - 6.0) * e,
             );
             let detail = if bloc.registre == Registre::Image {
-                format!("{}  ·  sortie de la mémoire, avec les plus anciennes", bloc.corps)
+                crate::tf!("{}  ·  sortie de la mémoire, avec les plus anciennes", "{}  ·  evicted from memory, with the oldest ones", bloc.corps)
             } else {
                 bloc.corps.clone()
             };
@@ -936,19 +937,19 @@ impl Vigie {
                 self.resume_chantier(id),
             ),
             Vue::Suivi(id) if self.introuvable.as_deref() == Some(id.as_str()) => {
-                (id.clone(), String::new(), "introuvable sous toutes les sessions".to_string())
+                (id.clone(), String::new(), crate::langue::tr("introuvable sous toutes les sessions", "not found under any session").to_string())
             }
             Vue::Suivi(id) if self.role.is_empty() => (
                 self.catalogue.chantier(id).map_or_else(|| id.clone(), |c| c.nom.clone()),
                 String::new(),
-                "lecture du fil".to_string(),
+                crate::langue::tr("lecture du fil", "reading the thread").to_string(),
             ),
             Vue::Direct if self.role.is_empty() && !self.catalogue.complet => (
-                "Direct".to_string(),
+                crate::langue::tr("Direct", "Live").to_string(),
                 String::new(),
-                format!("inventaire en cours  ·  {} chantiers lus", self.catalogue.chantiers.len()),
+                crate::tf!("inventaire en cours  ·  {} chantiers lus", "inventory in progress  ·  {} runs read", self.catalogue.chantiers.len()),
             ),
-            Vue::Direct if self.role.is_empty() => ("Direct".to_string(), String::new(), "en attente".to_string()),
+            Vue::Direct if self.role.is_empty() => (crate::langue::tr("Direct", "Live").to_string(), String::new(), crate::langue::tr("en attente", "waiting").to_string()),
             _ => {
                 let (lieu, reste) = self.libelle_fil();
                 (self.role.clone(), lieu, reste)
@@ -990,9 +991,10 @@ impl Vigie {
         let i = self.poses.iter().filter(|p| p.image.is_some()).count().saturating_sub(sons);
         let pluriel = |n: usize, mot: &str| if n == 1 { format!("1 {mot}") } else { format!("{n} {mot}s") };
         if g + d + i + sons > 0 {
-            let mut texte = format!("{}, {}, {}", pluriel(g, "geste"), pluriel(d, "message"), pluriel(i, "image"));
+            let mots = if crate::langue::fr() { ("geste", "message", "image", "son") } else { ("step", "message", "image", "sound") };
+            let mut texte = format!("{}, {}, {}", pluriel(g, mots.0), pluriel(d, mots.1), pluriel(i, mots.2));
             if sons > 0 {
-                texte.push_str(&format!(", {}", pluriel(sons, "son")));
+                texte.push_str(&format!(", {}", pluriel(sons, mots.3)));
             }
             parties.push(texte);
         }
@@ -1017,16 +1019,16 @@ impl Vigie {
                 }
             }
             Some(f) => parties.push(match total {
-                Some(t) => format!("lecture des agents, {} sur {t}", f.agents.len().min(t)),
-                None => format!("lecture des agents, {} lus", f.agents.len()),
+                Some(t) => crate::tf!("lecture des agents, {} sur {t}", "reading agents, {} of {t}", f.agents.len().min(t)),
+                None => crate::tf!("lecture des agents, {} lus", "reading agents, {} read", f.agents.len()),
             }),
-            None => parties.push("lecture des agents".to_string()),
+            None => parties.push(crate::langue::tr("lecture des agents", "reading agents").to_string()),
         }
         if let Some(c) = c {
             let (jour, minute) = dates::jour_et_minute(c.debut);
             let aujourdhui = dates::jour_et_minute(app::maintenant()).0;
             let j = dates::libelle_jour(jour, aujourdhui);
-            parties.push(format!("lancé {} à {}", minuscule_jour(&j), dates::heure(minute)));
+            parties.push(crate::tf!("lancé {} à {}", "started {} at {}", minuscule_jour(&j), dates::heure(minute)));
             parties.push(c.projet.clone());
         }
         parties.join("  ·  ")
@@ -1037,15 +1039,15 @@ impl Vigie {
         let n = self.catalogue.de(p).count();
         if n == 0 {
             return if self.catalogue.complet {
-                "aucun chantier connu".to_string()
+                crate::langue::tr("aucun chantier connu", "no known runs").to_string()
             } else {
-                "inventaire en cours".to_string()
+                crate::langue::tr("inventaire en cours", "inventory in progress").to_string()
             };
         }
         let k = self.catalogue.de(p).filter(|c| c.etat == catalogue::Etat::EnCours).count();
-        let mut s = if n == 1 { "1 chantier".to_string() } else { format!("{n} chantiers") };
+        let mut s = if n == 1 { crate::langue::tr("1 chantier", "1 run").to_string() } else { crate::tf!("{n} chantiers", "{n} runs") };
         if k > 0 {
-            s.push_str(&format!("  ·  {k} en cours"));
+            s.push_str(&crate::tf!("  ·  {k} en cours", "  ·  {k} running"));
         }
         s
     }
@@ -1194,9 +1196,10 @@ impl Vigie {
                     b.registre = Registre::Geste;
                     b.outil = "Image".to_string();
                     b.corps = format!(
-                        "{}  ·  la même que {}",
-                        img.nom().unwrap_or_else(|| "image reçue".to_string()),
-                        autre.unwrap_or_else(|| "une image reçue plus haut".to_string())
+                        "{}  ·  {} {}",
+                        img.nom().unwrap_or_else(|| crate::langue::tr("image reçue", "image received").to_string()),
+                        crate::langue::tr("la même que", "same as"),
+                        autre.unwrap_or_else(|| crate::langue::tr("une image reçue plus haut", "an image received above").to_string())
                     );
                 }
             }
@@ -2877,13 +2880,13 @@ impl Vigie {
             Vue::Liste(p) if self.liste.as_ref().is_none_or(|l| l.lignes.is_empty()) => {
                 Some(if self.catalogue.complet {
                     (
-                        "Aucun chantier sous ce nom".to_string(),
-                        format!("Aucun agent n’a travaillé dans « {p} ». La touche Début revient au direct."),
+                        crate::langue::tr("Aucun chantier sous ce nom", "No run under this name").to_string(),
+                        crate::tf!("Aucun agent n’a travaillé dans « {p} ». La touche Début revient au direct.", "No agent has worked in “{p}”. The Home key goes back to the live view."),
                     )
                 } else {
                     (
-                        "Inventaire des chantiers".to_string(),
-                        "Le premier parcours lit chaque chantier, du plus récent au plus ancien."
+                        crate::langue::tr("Inventaire des chantiers", "Reading the runs").to_string(),
+                        crate::langue::tr("Le premier parcours lit chaque chantier, du plus récent au plus ancien.", "The first pass reads every run, from the newest to the oldest.")
                             .to_string(),
                     )
                 })
@@ -2891,38 +2894,38 @@ impl Vigie {
             Vue::Chantier(id) if self.liste.as_ref().is_none_or(|l| l.lignes.is_empty()) => Some(
                 if self.fiche.as_ref().is_some_and(|f| &f.id == id) {
                     (
-                        "Aucun agent".to_string(),
-                        "Ce chantier n’a encore lancé personne. Retour arrière revient à la liste.".to_string(),
+                        crate::langue::tr("Aucun agent", "No agent").to_string(),
+                        crate::langue::tr("Ce chantier n’a encore lancé personne. Retour arrière revient à la liste.", "This run has not started anyone yet. Backspace goes back to the list.").to_string(),
                     )
                 } else {
                     (
-                        "Lecture du chantier".to_string(),
-                        "Chaque agent est lu une fois, images comprises ; ensuite, seul ce qui s’ajoute.".to_string(),
+                        crate::langue::tr("Lecture du chantier", "Reading the run").to_string(),
+                        crate::langue::tr("Chaque agent est lu une fois, images comprises ; ensuite, seul ce qui s’ajoute.", "Each agent is read once, images included; after that, only what is added.").to_string(),
                     )
                 },
             ),
             // Le direct sans agent : un etat, et ce qui va suivre (cadre, C8).
             Vue::Direct if self.role.is_empty() => Some(if self.catalogue.complet {
                 (
-                    "Aucun chantier ne tourne".to_string(),
+                    crate::langue::tr("Aucun chantier ne tourne", "No run is working").to_string(),
                     // La suite promise doit exister : sans aucun projet, la
                     // barre n'a que le direct (juge-design.md, m4).
                     if self.onglets.len() > 1 {
-                        "Le prochain qui démarre s’affichera ici de lui-même. ← et → parcourent les projets et leurs chantiers passés."
+                        crate::langue::tr("Le prochain qui démarre s’affichera ici de lui-même. ← et → parcourent les projets et leurs chantiers passés.", "The next one to start will show up here by itself. ← and → browse the projects and their past runs.")
                             .to_string()
                     } else {
-                        "Le prochain qui démarre s’affichera ici de lui-même.".to_string()
+                        crate::langue::tr("Le prochain qui démarre s’affichera ici de lui-même.", "The next one to start will show up here by itself.").to_string()
                     },
                 )
             } else {
                 (
-                    "Inventaire des chantiers".to_string(),
-                    "Ils arrivent du plus récent au plus ancien ; le direct s’attachera à l’agent qui écrit dès qu’il le trouve."
+                    crate::langue::tr("Inventaire des chantiers", "Reading the runs").to_string(),
+                    crate::langue::tr("Ils arrivent du plus récent au plus ancien ; le direct s’attachera à l’agent qui écrit dès qu’il le trouve.", "They arrive from the newest to the oldest; the live view attaches to the agent that is writing as soon as it finds one.")
                         .to_string(),
                 )
             }),
             Vue::Suivi(id) if self.introuvable.as_deref() == Some(id.as_str()) => Some((
-                "Chantier introuvable".to_string(),
+                crate::langue::tr("Chantier introuvable", "Run not found").to_string(),
                 format!("{id} n’existe sous aucune session. La touche Début revient au direct."),
             )),
             _ => None,
@@ -3005,7 +3008,7 @@ impl Vigie {
 
         // « Projets », le titre du groupe de la barre, se pose hors du dessin.
         if self.groupe_projets.is_none() {
-            let titre = if self.catalogue.complet { "Projets" } else { "Projets  ·  lecture" };
+            let titre = if self.catalogue.complet { crate::langue::tr("Projets", "Projects") } else { crate::langue::tr("Projets  ·  lecture", "Projects  ·  reading") };
             let (b, _) = vues::une_ligne(
                 &mut self.systeme,
                 Metrics::new(12.0 * e, 16.0 * e),
@@ -3017,7 +3020,7 @@ impl Vigie {
         }
         let ouverte = self.barre.cible() > 0.5;
         if self.bulle.as_ref().is_none_or(|(o, _, _)| *o != ouverte) {
-            let texte = if ouverte { "Masquer la barre  ·  Ctrl + B" } else { "Afficher la barre  ·  Ctrl + B" };
+            let texte = if ouverte { crate::langue::tr("Masquer la barre  ·  Ctrl + B", "Hide the sidebar  ·  Ctrl + B") } else { crate::langue::tr("Afficher la barre  ·  Ctrl + B", "Show the sidebar  ·  Ctrl + B") };
             let (b, l) = vues::une_ligne(
                 &mut self.systeme,
                 Metrics::new(13.0 * e, 18.0 * e),
@@ -3599,11 +3602,11 @@ impl Vigie {
         let boite = self.plan().liens.iter().find(|(_, i, j)| *i == b && *j == k)?.0;
         let a = passage::adresse(&url);
         let (mot, alerte) = match passage::classer(&url) {
-            passage::Classe::Refuse(_) => ("lien refusé", true),
-            passage::Classe::Local => ("cet ordinateur", true),
-            passage::Classe::NonChiffre => ("non chiffré", true),
-            _ if self.passage_connu(&url) => ("passage cité", false),
-            _ if self.aucun_passage_cite(&url) => ("aucun passage cité", false),
+            passage::Classe::Refuse(_) => (crate::langue::tr("lien refusé", "link refused"), true),
+            passage::Classe::Local => (crate::langue::tr("cet ordinateur", "this computer"), true),
+            passage::Classe::NonChiffre => (crate::langue::tr("non chiffré", "not encrypted"), true),
+            _ if self.passage_connu(&url) => (crate::langue::tr("passage cité", "quoted passage"), false),
+            _ if self.aucun_passage_cite(&url) => (crate::langue::tr("aucun passage cité", "no quoted passage"), false),
             _ => ("", false),
         };
         let cle = format!("{url}|{mot}|{e}|{}", palette::clair());
@@ -3697,7 +3700,7 @@ impl Vigie {
 
         // Les textes : le nom et ce qui le suit, le rang, l'aide, et pour une
         // video son temps et sa duree. Poses seulement quand ils changent.
-        let nom = el.image.nom().unwrap_or_else(|| "image reçue".to_string());
+        let nom = el.image.nom().unwrap_or_else(|| crate::langue::tr("image reçue", "image received").to_string());
         let audio = el.image.est_audio();
         let mut details = vec![el.details.clone()];
         if !audio {
@@ -3718,23 +3721,24 @@ impl Vigie {
         }
         details.retain(|x| !x.is_empty());
         let compteur = if total > 1 { format!("{n} / {total}") } else { String::new() };
-        let mut aide = vec!["Échap  fermer"];
+        let tr = crate::langue::tr;
+        let mut aide = vec![tr("Échap  fermer", "Esc  close")];
         if total > 1 {
-            aide.push("← →  parcourir");
+            aide.push(tr("← →  parcourir", "← →  browse"));
         }
         if audio {
-            aide.push("Espace  lire ou suspendre");
-            aide.push("Clic sur l'onde  aller à");
+            aide.push(tr("Espace  lire ou suspendre", "Space  play or pause"));
+            aide.push(tr("Clic sur l'onde  aller à", "Click the waveform  seek"));
         } else if video {
-            aide.push("Espace  lire ou suspendre");
+            aide.push(tr("Espace  lire ou suspendre", "Space  play or pause"));
         } else if zoomee {
-            aide.push("Glisser  déplacer");
-            aide.push("0  ajuster");
+            aide.push(tr("Glisser  déplacer", "Drag  pan"));
+            aide.push(tr("0  ajuster", "0  fit"));
         } else {
-            aide.push("Molette ou double-clic  zoomer");
+            aide.push(tr("Molette ou double-clic  zoomer", "Scroll or double-click  zoom"));
         }
         if el.agent.is_some() {
-            aide.push("Entrée  voir dans le fil");
+            aide.push(tr("Entrée  voir dans le fil", "Enter  show in the thread"));
         }
         let aide = aide.join("      ");
         let (ecoule, duree) = lecture.map_or((String::new(), String::new()), |(p, d, joue)| {
@@ -5045,6 +5049,10 @@ fn minuscule_jour(titre: &str) -> String {
         Some(p) => p.to_lowercase().chain(c).collect::<String>(),
         None => String::new(),
     };
+    if !crate::langue::fr() {
+        // « today », « yesterday », ou « on Thursday, October 1 ».
+        return if bas == "today" || bas == "yesterday" { bas } else { format!("on {titre}") };
+    }
     if bas.starts_with("aujourd") || bas == "hier" {
         bas
     } else {

@@ -222,38 +222,38 @@ def script(wf, nom, desc):
 
 shutil.rmtree(RACINE, ignore_errors=True)
 
-script("wf_a1b2c3d4-e5f", "rendu-terrain", "Rendre le terrain de la planete et mesurer le cout de chaque passe")
+script("wf_a1b2c3d4-e5f", "terrain-render", "Render the planet terrain and measure the cost of each pass")
 f = Fil("a1c0de00000000001", FIN - timedelta(minutes=9))
-f.consigne("Rendre le terrain xxxxx de la carte orbite-04 en perspective isometrique, puis verifier que le relief reste lisible a xxxxx pixels.")
-f.dit("Je commence par generer la carte de hauteur, puis je compare deux eclairages avant de choisir.")
-f.geste("Bash", {"command": "cd C:/demo/orbite && python outils/terrain.py --seed 7 --grille 220 --sortie rendus/terrain.png"}, "grille 220x220, 48400 sommets, 38 ms\nrendus/terrain.png")
-f.geste("Read", {"file_path": "C:/demo/orbite/rendus/terrain.png"}, "", image="terrain")
-f.dit("Le relief se lit bien, mais la crete au centre sature : la hauteur depasse xxxxx. Je compresse la courbe plutot que de reduire l'echelle.")
-f.geste("Edit", {"file_path": "C:/demo/orbite/outils/terrain.py", "old_string": "z = h", "new_string": "z = tanh(h / 1.6) * 1.6"}, "Le fichier a ete modifie.")
-f.geste("Bash", {"command": "cd C:/demo/orbite && python outils/terrain.py --seed 7 --grille 220 --sortie rendus/terrain-2.png"}, "grille 220x220, 48400 sommets, 41 ms\nrendus/terrain-2.png")
-f.dit("Mesure : 41 ms contre 38 ms, la compression coute 3 ms. J'accepte, le relief n'est plus ecrase.")
-ecrire("wf_a1b2c3d4-e5f", "rendu:isometrique", "Rendu", f)
+f.consigne("Render the xxxxx terrain of map orbit-04 in isometric perspective, then check that the relief stays readable at xxxxx pixels.")
+f.dit("I start by generating the height map, then I compare two lightings before choosing.")
+f.geste("Bash", {"command": "cd C:/demo/orbite && python tools/terrain.py --seed 7 --grid 220 --output renders/terrain.png"}, "grid 220x220, 48400 vertices, 38 ms\nrenders/terrain.png")
+f.geste("Read", {"file_path": "C:/demo/orbite/renders/terrain.png"}, "", image="terrain")
+f.dit("The relief reads well, but the central ridge saturates: the height goes above xxxxx. I will compress the curve rather than shrink the scale.")
+f.geste("Edit", {"file_path": "C:/demo/orbite/tools/terrain.py", "old_string": "z = h", "new_string": "z = tanh(h / 1.6) * 1.6"}, "The file has been updated.")
+f.geste("Bash", {"command": "cd C:/demo/orbite && python tools/terrain.py --seed 7 --grid 220 --output renders/terrain-2.png"}, "grid 220x220, 48400 vertices, 41 ms\nrenders/terrain-2.png")
+f.dit("Measured: 41 ms against 38 ms, the compression costs 3 ms. I accept it, the relief is no longer flattened.")
+ecrire("wf_a1b2c3d4-e5f", "render:isometric", "Render", f)
 
-script("wf_b2c3d4e5-f6a", "audit-reseau", "Auditer la topologie du maillage et trouver les noeuds isoles")
+script("wf_b2c3d4e5-f6a", "network-audit", "Audit the mesh topology and find the nodes that isolate it")
 g = Fil("b2c0de00000000002", FIN - timedelta(minutes=14))
-g.consigne("Auditer la topologie du maillage xxxxx : trouver les noeuds qui isolent le graphe et dire lequel couper en dernier.")
-g.dit("Hypothese de depart : les noeuds de pont sont ceux dont le retrait deconnecte le plus de voisins.")
-g.geste("Bash", {"command": "cd C:/demo/orbite && python outils/topologie.py --noeuds 32 --sortie rendus/reseau.png"}, "32 noeuds, 118 liens, 3 points d'articulation\nrendus/reseau.png")
-g.geste("Read", {"file_path": "C:/demo/orbite/rendus/reseau.png"}, "", image="reseau")
-g.dit("Trois points d'articulation, dont deux sont les noeuds dores au centre. Le troisieme, n17, ne tient que par un seul lien : c'est lui qu'il faut doubler en premier.")
-g.geste("Grep", {"pattern": "n17", "path": "C:/demo/orbite/config"}, "config/liens.toml:41: n17 -> n03 (xxxxx)")
-g.dit("Reponse : doubler n17 -> n03 avant toute coupure. Le reste du graphe survit a la perte de n'importe quel autre noeud.")
-ecrire("wf_b2c3d4e5-f6a", "audit:topologie", "Audit", g)
+g.consigne("Audit the xxxxx mesh topology: find the nodes that isolate the graph and say which one to cut last.")
+g.dit("Starting hypothesis: the bridge nodes are the ones whose removal disconnects the most neighbours.")
+g.geste("Bash", {"command": "cd C:/demo/orbite && python tools/topology.py --nodes 32 --output renders/network.png"}, "32 nodes, 118 links, 3 articulation points\nrenders/network.png")
+g.geste("Read", {"file_path": "C:/demo/orbite/renders/network.png"}, "", image="reseau")
+g.dit("Three articulation points, two of which are the golden nodes in the middle. The third, n17, hangs by a single link: that is the one to double first.")
+g.geste("Grep", {"pattern": "n17", "path": "C:/demo/orbite/config"}, "config/links.toml:41: n17 -> n03 (xxxxx)")
+g.dit("Answer: double n17 -> n03 before any cut. The rest of the graph survives the loss of any other node.")
+ecrire("wf_b2c3d4e5-f6a", "audit:topology", "Audit", g)
 
-script("wf_c3d4e5f6-a7b", "mesure-latence", "Mesurer la latence sous charge et comparer deux files d'attente")
+script("wf_c3d4e5f6-a7b", "latency-measure", "Measure latency under load and compare two queues")
 h = Fil("c3c0de00000000003", FIN - timedelta(seconds=40))
-h.consigne("Mesurer la latence p50 / p95 / p99 sous charge xxxxx pour les deux files d'attente et dire laquelle tient 120 secondes.")
-h.dit("Je lance les deux files sur la meme charge, dans cet ordre puis dans l'ordre inverse, pour ne pas confondre la file avec le chauffage de la machine.")
-h.geste("Bash", {"command": "cd C:/demo/orbite && python outils/charge.py --files fifo,prio --duree 120 --sortie rendus/latence.png"}, "fifo : p50 74 ms  p95 181 ms  p99 243 ms\nprio : p50 71 ms  p95 142 ms  p99 198 ms\nrendus/latence.png")
-h.geste("Read", {"file_path": "C:/demo/orbite/rendus/latence.png"}, "", image="latence")
-h.dit("La file prioritaire gagne sur le p95 (142 contre 181 ms) mais la courbe verte, la plus lente, montre une derive que je ne m'explique pas encore. Je relance dans l'ordre inverse.")
-h.geste("Bash", {"command": "cd C:/demo/orbite && python outils/charge.py --files prio,fifo --duree 120 --sortie rendus/latence-inverse.png"}, "prio : p50 72 ms  p95 144 ms  p99 201 ms\nfifo : p50 75 ms  p95 183 ms  p99 241 ms")
-ecrire("wf_c3d4e5f6-a7b", "mesure:latence", "Mesure", h)
+h.consigne("Measure p50 / p95 / p99 latency under xxxxx load for the two queues and say which one holds for 120 seconds.")
+h.dit("I run both queues on the same load, in this order and then in the reverse order, so that I do not confuse the queue with the machine warming up. The model I compare against is described at https://example.org/queueing-notes.")
+h.geste("Bash", {"command": "cd C:/demo/orbite && python tools/load.py --queues fifo,prio --duration 120 --output renders/latency.png"}, "fifo: p50 74 ms  p95 181 ms  p99 243 ms\nprio: p50 71 ms  p95 142 ms  p99 198 ms\nrenders/latency.png")
+h.geste("Read", {"file_path": "C:/demo/orbite/renders/latency.png"}, "", image="latence")
+h.dit("The priority queue wins on p95 (142 against 181 ms) but the green curve, the slowest one, shows a drift I cannot explain yet. I run it again in the reverse order.")
+h.geste("Bash", {"command": "cd C:/demo/orbite && python tools/load.py --queues prio,fifo --duration 120 --output renders/latency-reverse.png"}, "prio: p50 72 ms  p95 144 ms  p99 201 ms\nfifo: p50 75 ms  p95 183 ms  p99 241 ms")
+ecrire("wf_c3d4e5f6-a7b", "measure:latency", "Measure", h)
 
 def agent(ident, depart, consigne, pas, wf, label, phase):
     """Un agent de plus : pas = [(texte,) | (outil, entree, resultat[, image])]."""
@@ -267,59 +267,59 @@ def agent(ident, depart, consigne, pas, wf, label, phase):
     ecrire(wf, label, phase, a)
 
 
-B = "cd C:/demo/orbite && python outils/"
+B = "cd C:/demo/orbite && python tools/"
 # Le rendu : deux agents de plus, en parallele du premier.
-agent("a1c0de00000000002", FIN - timedelta(minutes=9, seconds=-20), "Verifier que le relief reste lisible quand la carte est reduite a xxxxx pixels.",
-      [("Je reduis la carte aux trois echelles de l'interface et je compare le contraste des cretes.",),
-       ("Bash", {"command": B + "echelles.py --cartes rendus/terrain.png --reduire 1,0.5,0.25"}, "1.00  contraste 0.82\n0.50  contraste 0.74\n0.25  contraste 0.51"),
-       ("Bash", {"command": B + "carte_chaleur.py --entree rendus/terrain.png --sortie rendus/chaleur.png"}, "cellules 8x5, max 0.93\nrendus/chaleur.png"),
-       ("Read", {"file_path": "C:/demo/orbite/rendus/chaleur.png"}, "", "chaleur"),
-       ("A un quart de taille le contraste tombe a 0.51 : les cretes secondaires disparaissent. Les trois foyers restent, c'est ce qui compte pour la lecture.",)],
-      "wf_a1b2c3d4-e5f", "rendu:echelles", "Rendu")
-agent("a1c0de00000000003", FIN - timedelta(minutes=8), "Ajouter l'ombrage doux sous le relief sans depasser xxxxx ms par image.",
-      [("L'ombrage doux demande une seconde passe de flou. Je mesure d'abord ce que coute la premiere.",),
-       ("Bash", {"command": B + "ombre.py --rayon 6 --sortie rendus/ombre.png"}, "passe 1 : 9 ms\npasse 2 : 11 ms\nrendus/ombre.png"),
-       ("Read", {"file_path": "C:/demo/orbite/rendus/ombre.png"}, "", "ruban"),
-       ("Edit", {"file_path": "C:/demo/orbite/outils/ombre.py", "old_string": "rayon = 6", "new_string": "rayon = 4"}, "Le fichier a ete modifie."),
-       ("Bash", {"command": B + "ombre.py --rayon 4 --sortie rendus/ombre-2.png"}, "passe 1 : 6 ms\npasse 2 : 7 ms\nrendus/ombre-2.png"),
-       ("Un rayon de 4 au lieu de 6 : 13 ms au total, sous le budget de 16 ms, et l'ombre se voit encore.",)],
-      "wf_a1b2c3d4-e5f", "rendu:ombrage", "Rendu")
+agent("a1c0de00000000002", FIN - timedelta(minutes=9, seconds=-20), "Check that the relief stays readable when the map is reduced to xxxxx pixels.",
+      [("I reduce the map to the three scales of the interface and compare the contrast of the ridges.",),
+       ("Bash", {"command": B + "scales.py --maps renders/terrain.png --reduce 1,0.5,0.25"}, "1.00  contrast 0.82\n0.50  contrast 0.74\n0.25  contrast 0.51"),
+       ("Bash", {"command": B + "heatmap.py --input renders/terrain.png --output renders/heat.png"}, "cells 8x5, max 0.93\nrenders/heat.png"),
+       ("Read", {"file_path": "C:/demo/orbite/renders/heat.png"}, "", "chaleur"),
+       ("At a quarter size the contrast drops to 0.51: the secondary ridges disappear. The three hot spots stay, and that is what matters for reading.",)],
+      "wf_a1b2c3d4-e5f", "render:scales", "Render")
+agent("a1c0de00000000003", FIN - timedelta(minutes=8), "Add soft shading under the relief without going over xxxxx ms per frame.",
+      [("Soft shading needs a second blur pass. I first measure what the first one costs.",),
+       ("Bash", {"command": B + "shadow.py --radius 6 --output renders/shadow.png"}, "pass 1: 9 ms\npass 2: 11 ms\nrenders/shadow.png"),
+       ("Read", {"file_path": "C:/demo/orbite/renders/shadow.png"}, "", "ruban"),
+       ("Edit", {"file_path": "C:/demo/orbite/tools/shadow.py", "old_string": "radius = 6", "new_string": "radius = 4"}, "The file has been updated."),
+       ("Bash", {"command": B + "shadow.py --radius 4 --output renders/shadow-2.png"}, "pass 1: 6 ms\npass 2: 7 ms\nrenders/shadow-2.png"),
+       ("A radius of 4 instead of 6: 13 ms in total, under the 16 ms budget, and the shadow is still visible.",)],
+      "wf_a1b2c3d4-e5f", "render:shading", "Render")
 # L'audit : deux agents de plus.
-agent("b2c0de00000000003", FIN - timedelta(minutes=13), "Chercher les liens redondants du maillage xxxxx, ceux qu'on peut retirer sans isoler personne.",
-      [("Un lien est redondant si ses deux extremites restent joignables autrement. Je le teste lien par lien.",),
-       ("Bash", {"command": B + "redondance.py --liens config/liens.toml"}, "118 liens, 21 redondants, 3 critiques\nsortie : rendus/redondance.txt"),
-       ("Grep", {"pattern": "critique", "path": "C:/demo/orbite/rendus/redondance.txt"}, "n17-n03 critique\nn09-n22 critique\nn30-n31 critique"),
-       ("Trois liens critiques, et n17-n03 est celui que l'audit principal a deja designe : les deux methodes concordent.",)],
-      "wf_b2c3d4e5-f6a", "audit:redondance", "Audit")
-agent("b2c0de00000000004", FIN - timedelta(minutes=12), "Simuler la perte de chaque noeud et dire combien de voisins restent joignables.",
-      [("Je retire les noeuds un par un et je compte la plus grande composante restante.",),
-       ("Bash", {"command": B + "pertes.py --noeuds 32 --sortie rendus/pertes.png"}, "pire cas : n17, 4 noeuds isoles\nmediane : 0 noeud isole\nrendus/pertes.png"),
-       ("Read", {"file_path": "C:/demo/orbite/rendus/pertes.png"}, "", "spectre"),
-       ("La mediane est a zero : le maillage tient presque partout. Seul n17 casse quelque chose, et c'est quatre noeuds.",)],
-      "wf_b2c3d4e5-f6a", "audit:pertes", "Audit")
+agent("b2c0de00000000003", FIN - timedelta(minutes=13), "Look for the redundant links of the xxxxx mesh, the ones that can be removed without isolating anyone.",
+      [("A link is redundant if its two ends stay reachable another way. I test it link by link.",),
+       ("Bash", {"command": B + "redundancy.py --links config/links.toml"}, "118 links, 21 redundant, 3 critical\noutput: renders/redundancy.txt"),
+       ("Grep", {"pattern": "critical", "path": "C:/demo/orbite/renders/redundancy.txt"}, "n17-n03 critical\nn09-n22 critical\nn30-n31 critical"),
+       ("Three critical links, and n17-n03 is the one the main audit already pointed to: the two methods agree.",)],
+      "wf_b2c3d4e5-f6a", "audit:redundancy", "Audit")
+agent("b2c0de00000000004", FIN - timedelta(minutes=12), "Simulate the loss of each node and say how many neighbours stay reachable.",
+      [("I remove the nodes one by one and count the largest remaining component.",),
+       ("Bash", {"command": B + "losses.py --nodes 32 --output renders/losses.png"}, "worst case: n17, 4 nodes isolated\nmedian: 0 nodes isolated\nrenders/losses.png"),
+       ("Read", {"file_path": "C:/demo/orbite/renders/losses.png"}, "", "spectre"),
+       ("The median is zero: the mesh holds almost everywhere. Only n17 breaks something, and it is four nodes.",)],
+      "wf_b2c3d4e5-f6a", "audit:losses", "Audit")
 # La mesure en cours : un agent de plus.
-agent("c3c0de00000000004", FIN - timedelta(seconds=55), "Verifier que le chauffage de la machine ne fausse pas la mesure de la file prioritaire.",
-      [("Je note la frequence du processeur pendant chaque passe pour voir si elle derive.",),
-       ("Bash", {"command": B + "frequence.py --duree 120 --sortie rendus/orbites.png"}, "debut 4.1 GHz, fin 3.9 GHz\nderive : -4.8 %\nrendus/orbites.png"),
-       ("Read", {"file_path": "C:/demo/orbite/rendus/orbites.png"}, "", "orbites"),
-       ("Une derive de moins de 5 % : elle ne suffit pas a expliquer l'ecart de 39 ms sur le p95.",)],
-      "wf_c3d4e5f6-a7b", "mesure:frequence", "Mesure")
+agent("c3c0de00000000004", FIN - timedelta(seconds=55), "Check that the heating of the machine does not distort the measurement of the priority queue.",
+      [("I note the processor frequency during each pass to see whether it drifts.",),
+       ("Bash", {"command": B + "frequency.py --duration 120 --output renders/orbits.png"}, "start 4.1 GHz, end 3.9 GHz\ndrift: -4.8 %\nrenders/orbits.png"),
+       ("Read", {"file_path": "C:/demo/orbite/renders/orbits.png"}, "", "orbites"),
+       ("A drift of less than 5 %: it does not explain the 39 ms gap on the p95.",)],
+      "wf_c3d4e5f6-a7b", "measure:frequency", "Measure")
 
 # Un second projet, termine : l'etalonnage d'une balise.
 SESSION = "8c3a91f4-2b6d-4d57-a0e2-6f1b7c4d2a08"
 PROJET = "C--demo-balise"
 CWD = "C:\\demo\\balise"
-script("wf_d4e5f6a7-b8c", "etalonnage-balise", "Etalonner la balise et verifier sa derive sur une nuit")
+script("wf_d4e5f6a7-b8c", "beacon-calibration", "Calibrate the beacon and check its drift over a night")
 k = Fil("d4c0de00000000001", FIN - timedelta(hours=2, minutes=10))
-k.consigne("Etalonner la balise xxxxx avec la source de reference puis verifier sa derive sur xxxxx heures.")
-k.dit("Je commence par l'etalonnage a trois points, puis je laisse tourner la mesure de derive.")
-k.geste("Bash", {"command": "cd C:/demo/balise && python outils/etalonner.py --points 3 --sortie rendus/spectre.png"}, "point 1 : -0.4 dB\npoint 2 : +0.1 dB\npoint 3 : +0.3 dB\nrendus/spectre.png")
-k.geste("Read", {"file_path": "C:/demo/balise/rendus/spectre.png"}, "", image="spectre")
-k.dit("Deux pics nets, l'un a 22 et l'autre a 58. Le second est plus large : c'est l'harmonique, pas un defaut.")
-k.geste("Bash", {"command": "cd C:/demo/balise && python outils/derive.py --heures 8 --sortie rendus/derive.png"}, "derive maximale : 0.07 dB sur 8 h\nrendus/derive.png")
-k.geste("Read", {"file_path": "C:/demo/balise/rendus/derive.png"}, "", image="latence")
-k.dit("Derive maximale de 0.07 dB sur huit heures, bien sous la tolerance de 0.5 dB. La balise est etalonnee.")
-ecrire("wf_d4e5f6a7-b8c", "etalonnage:balise", "Etalonnage", k)
+k.consigne("Calibrate the xxxxx beacon against the reference source, then check its drift over xxxxx hours.")
+k.dit("I start with the three-point calibration, then I let the drift measurement run.")
+k.geste("Bash", {"command": "cd C:/demo/balise && python tools/calibrate.py --points 3 --output renders/spectrum.png"}, "point 1: -0.4 dB\npoint 2: +0.1 dB\npoint 3: +0.3 dB\nrenders/spectrum.png")
+k.geste("Read", {"file_path": "C:/demo/balise/renders/spectrum.png"}, "", image="spectre")
+k.dit("Two clear peaks, one at 22 and the other at 58. The second is wider: it is the harmonic, not a defect.")
+k.geste("Bash", {"command": "cd C:/demo/balise && python tools/drift.py --hours 8 --output renders/drift.png"}, "maximum drift: 0.07 dB over 8 h\nrenders/drift.png")
+k.geste("Read", {"file_path": "C:/demo/balise/renders/drift.png"}, "", image="latence")
+k.dit("Maximum drift of 0.07 dB over eight hours, well under the 0.5 dB tolerance. The beacon is calibrated.")
+ecrire("wf_d4e5f6a7-b8c", "calibration:beacon", "Calibration", k)
 
 os.makedirs(os.path.join(RACINE, "vigie"), exist_ok=True)
 print("ecrit", RACINE, "VIGIE_MAINTENANT =", int(FIN.timestamp()) + 20)

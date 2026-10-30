@@ -29,6 +29,8 @@ Invented demo data (a fictional project called "orbite"), reproducible with
 
 ![The runs of a project](docs/capture-3.png)
 
+![A link the agent cited: Vigie reads its text on click, and says plainly when it cannot](docs/capture-4-link.png)
+
 ## What it does
 
 - **Follows the live agent by itself.** Nothing to configure: Vigie picks the most recent run,
@@ -120,7 +122,7 @@ Unit tests live next to the code (`cargo test`).
 ## Honest limits
 
 - **Windows is the reference platform.** Linux (x64) and macOS (Apple Silicon) build, pass their tests and render the same frames on GitHub's runners (Mesa/Vulkan and Metal), but nobody has yet used them on a real desktop with a mouse. There the in-app page engine (WebView2) does not exist, so a link's quoted passage is read as text instead, and "open elsewhere" hands the link to your system browser (`open` or `xdg-open`); sound plays through `ffplay` (part of ffmpeg) when it is on the `PATH`; the installer (`installer.sh`) installs for the current user only, and its install and uninstall are checked on GitHub's runners, not on a real desktop; single-instance and the native dialog guard are Windows-only. Intel Macs and Linux on ARM are not built.
-- **The interface is in French for now** (labels such as "Projets", "en cours", "image reçue"); the screenshots show it, and nothing is translated yet.
+- **The interface is in English or French**: it follows your system language, and `VIGIE_LANGUE=en` or `VIGIE_LANGUE=fr` overrides it. The long documentation (`LISEZ-MOI.md`) and the code comments are in French.
 - Claude Code, Codex CLI, Gemini CLI, OpenCode and Cursor are read; the Cursor reader is experimental (its format is barely documented), and none of these formats is stable across tool versions. Any other tool needs a new converter in `src/import/` (about 150 lines each).
 - No search or filter over past runs yet; at most 1,000 blocks are kept per thread.
 - A project is inferred from the folders the agents work in, not declared, and two

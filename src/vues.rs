@@ -486,7 +486,7 @@ pub fn poser_onglets(systeme: &mut FontSystem, voulus: &[(Option<String>, bool)]
     let mut y = 0.0;
     let mut sortie = Vec::with_capacity(voulus.len());
     for (rang, (projet, vivant)) in voulus.iter().enumerate() {
-        let libelle = projet.as_deref().unwrap_or("Direct");
+        let libelle = projet.as_deref().unwrap_or(crate::langue::tr("Direct", "Live"));
         let (tampon, _) = une_ligne(systeme, metrics, &attrs, libelle, place);
         sortie.push(OngletPose {
             projet: projet.clone(),
@@ -647,11 +647,11 @@ const LEGENDE_H: f32 = 17.0;
 /// La ligne d'un agent : « phase · etat · 3 images ».
 fn meta_agent(a: &FicheAgent) -> String {
     let etat = if a.vivant {
-        "en cours"
+        crate::langue::tr("en cours", "running")
     } else if a.fini {
-        "fini"
+        crate::langue::tr("fini", "finished")
     } else {
-        "interrompu"
+        crate::langue::tr("interrompu", "interrupted")
     };
     let mut parties: Vec<String> = Vec::new();
     parties.push(etat.to_string());
@@ -794,9 +794,9 @@ pub fn poser_page(
             systeme,
             "",
             "",
-            "Celui qui écrit",
-            "direct",
-            "Suit l’agent qui écrit, et passe à celui qui prend la main.",
+            crate::langue::tr("Celui qui écrit", "The one writing"),
+            crate::langue::tr("direct", "live"),
+            crate::langue::tr("Suit l’agent qui écrit, et passe à celui qui prend la main.", "Follows the agent that is writing, and switches to the one that takes over."),
             false,
             &mut y,
             None,
@@ -837,9 +837,9 @@ pub fn poser_page(
 
     if !fiche.vignettes.is_empty() {
         let titre = if fiche.complete && fiche.images > fiche.vignettes.len() {
-            format!("Pièces jointes, les {} premières sur {}", fiche.vignettes.len(), fiche.images)
+            crate::tf!("Pièces jointes, les {} premières sur {}", "Attachments, the first {} of {}", fiche.vignettes.len(), fiche.images)
         } else {
-            if fiche.complete { format!("Pièces jointes  ·  {}", fiche.images) } else { "Pièces jointes  ·  lecture en cours".to_string() }
+            if fiche.complete { crate::tf!("Pièces jointes  ·  {}", "Attachments  ·  {}", fiche.images) } else { crate::langue::tr("Pièces jointes  ·  lecture en cours", "Attachments  ·  reading").to_string() }
         };
         y += SECTION_AVANT * e;
         let (t, _) = largeur_libre(systeme, section_m, &demi_gras, &titre);
@@ -864,7 +864,7 @@ pub fn poser_page(
                 l: dl,
                 h: dh,
             };
-            let nom = v.image.nom().unwrap_or_else(|| "image reçue".to_string());
+            let nom = v.image.nom().unwrap_or_else(|| crate::langue::tr("image reçue", "image received").to_string());
             let (nom_b, _) = une_ligne(systeme, legende_m, &demi_gras, &nom, l);
             let mut details = Vec::new();
             if let Some(d) = v.image.video {
