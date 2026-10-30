@@ -24,7 +24,7 @@ jobs:
       VIGIE_MAINTENANT: "1793370620"
     steps:
       - uses: actions/checkout@v4
-      - name: Linux: virtual display and software Vulkan
+      - name: "Linux virtual display and software Vulkan"
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
