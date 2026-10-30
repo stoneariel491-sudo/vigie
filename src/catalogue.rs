@@ -828,6 +828,7 @@ mod essais {
 
     /// La forme relevee sur un chantier de atelier-b : la plupart des
     /// agents au dossier personnel, deux dans le depot. Le depot l'emporte.
+    #[cfg(windows)]
     #[test]
     fn le_depot_l_emporte_sur_le_dossier_personnel() {
         let agents = [
@@ -841,6 +842,7 @@ mod essais {
         assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), "atelier-b");
     }
 
+    #[cfg(windows)]
     #[test]
     fn a_egalite_l_agent_le_plus_ancien_decide() {
         let agents = [
@@ -852,6 +854,7 @@ mod essais {
         assert_eq!(voter(&agents, ACCUEIL, &mut sans_depot), "atelier-a");
     }
 
+    #[cfg(windows)]
     #[test]
     fn sans_aucun_lieu_le_dossier_personnel() {
         let agents = [
@@ -862,6 +865,7 @@ mod essais {
         assert_eq!(voter(&[], ACCUEIL, &mut sans_depot), DOSSIER_PERSONNEL);
     }
 
+    #[cfg(windows)]
     #[test]
     fn un_sous_dossier_se_ramene_a_son_depot() {
         let mut racine = |c: &str| {
@@ -873,6 +877,38 @@ mod essais {
         };
         let agents = [a("1", r"C:\Users\alex\dev\active\vitrine\recherche\verre-taille")];
         assert_eq!(voter(&agents, ACCUEIL, &mut racine), "vitrine");
+    }
+
+    /// Les memes votes, avec des chemins Unix.
+    #[cfg(not(windows))]
+    #[test]
+    fn le_vote_du_lieu_sous_unix() {
+        let accueil = "/home/alex";
+        let agents = [
+            a("2026-09-01T10:00:00Z", accueil),
+            a("2026-09-01T10:01:00Z", accueil),
+            a("2026-09-01T10:02:00Z", "/home/alex/dev/atelier-b"),
+            a("2026-09-01T10:03:00Z", accueil),
+        ];
+        assert_eq!(voter(&agents, accueil, &mut sans_depot), "atelier-b");
+        // A egalite, l'agent le plus ancien decide.
+        let egal = [
+            a("2026-09-01T10:05:00Z", "/home/alex/dev/atelier-c"),
+            a("2026-09-01T10:00:00Z", "/home/alex/dev/atelier-a"),
+            a("2026-09-01T10:09:00Z", "/home/alex/dev/atelier-c"),
+            a("2026-09-01T10:01:00Z", "/home/alex/dev/atelier-a"),
+        ];
+        assert_eq!(voter(&egal, accueil, &mut sans_depot), "atelier-a");
+        // Sans aucun lieu, le dossier personnel.
+        let rien = [a("1", accueil), a("2", "/home/alex/.claude/projects")];
+        assert_eq!(voter(&rien, accueil, &mut sans_depot), DOSSIER_PERSONNEL);
+        assert_eq!(voter(&[], accueil, &mut sans_depot), DOSSIER_PERSONNEL);
+        // Un sous-dossier se ramene a son depot.
+        let mut racine = |c: &str| {
+            if c.starts_with("/home/alex/dev/vitrine") { "/home/alex/dev/vitrine".to_string() } else { c.to_string() }
+        };
+        let sous = [a("1", "/home/alex/dev/vitrine/recherche/verre-taille")];
+        assert_eq!(voter(&sous, accueil, &mut racine), "vitrine");
     }
 
     #[test]
