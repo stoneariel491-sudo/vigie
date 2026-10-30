@@ -16,7 +16,9 @@
 
 pub mod claude;
 pub mod codex;
+pub mod cursor;
 pub mod gemini;
+pub mod opencode;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -36,6 +38,12 @@ pub trait Convertisseur: Send {
     fn cwd(&self) -> String;
     /// L'identifiant de la session, quand il est connu.
     fn session(&self) -> String;
+    /// Pour un outil dont la session n'est pas un fichier de lignes mais un
+    /// ensemble de fichiers : tout ce qui est a dire que l'on n'a pas encore dit,
+    /// relu depuis la source. `None` : la source est un fichier de lignes.
+    fn complet(&mut self, _source: &Path) -> Option<Vec<Value>> {
+        None
+    }
 }
 
 /// Un outil : ou chercher ses transcriptions, et comment les traduire.
@@ -45,11 +53,39 @@ pub struct Format {
     pub nouveau: fn(&Path) -> Box<dyn Convertisseur>,
 }
 
-pub const FORMATS: [Format; 3] = [
+pub const FORMATS: [Format; 5] = [
     Format { nom: "claude", trouver: claude::trouver, nouveau: claude::nouveau },
     Format { nom: "codex", trouver: codex::trouver, nouveau: codex::nouveau },
+    Format { nom: "cursor", trouver: cursor::trouver, nouveau: cursor::nouveau },
+    Format { nom: "opencode", trouver: opencode::trouver, nouveau: opencode::nouveau },
     Format { nom: "gemini", trouver: gemini::trouver, nouveau: gemini::nouveau },
 ];
+
+/// Un instant en millisecondes depuis 1970, a la facon des transcriptions :
+/// `2026-10-30T14:29:20.000Z`. Le calendrier se calcule a la main (jours civils
+/// d'apres Howard Hinnant), pour ne tirer aucune caisse de dates.
+pub fn iso_ms(ms: u64) -> String {
+    let secondes = ms / 1000;
+    let jours = (secondes / 86_400) as i64;
+    let reste = secondes % 86_400;
+    let z = jours + 719_468;
+    let ere = z.div_euclid(146_097);
+    let jde = z.rem_euclid(146_097);
+    let ae = (jde - jde / 1460 + jde / 36_524 - jde / 146_096) / 365;
+    let a = ae + ere * 400;
+    let jda = jde - (365 * ae + ae / 4 - ae / 100);
+    let mp = (5 * jda + 2) / 153;
+    let jour = jda - (153 * mp + 2) / 5 + 1;
+    let mois = if mp < 10 { mp + 3 } else { mp - 9 };
+    let annee = if mois <= 2 { a + 1 } else { a };
+    format!(
+        "{annee:04}-{mois:02}-{jour:02}T{:02}:{:02}:{:02}.{:03}Z",
+        reste / 3600,
+        reste % 3600 / 60,
+        reste % 60,
+        ms % 1000
+    )
+}
 
 pub fn maison() -> PathBuf {
     let base = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).unwrap_or_default();
@@ -225,23 +261,32 @@ fn passage(racine: &Path, suivies: &mut HashMap<PathBuf, Suivie>) {
                 reste: Vec::new(),
                 cible: None,
             });
-            let avant = s.lu;
-            let (lignes, suite) = lire_depuis(&source, s.lu, &mut s.reste);
-            if suite < avant {
-                s.cible = None;
-            }
-            s.lu = suite;
             let mut sorties: Vec<String> = Vec::new();
             let mut premiere = String::new();
-            for l in lignes {
-                let Ok(v) = serde_json::from_str::<Value>(&l) else { continue };
-                for out in s.convertisseur.ligne(&v) {
-                    if premiere.is_empty() && out["type"] == "user" {
-                        if let Some(t) = out["message"]["content"].as_str() {
-                            premiere = t.to_string();
-                        }
+            let mut garder = |out: Value, sorties: &mut Vec<String>| {
+                if premiere.is_empty() && out["type"] == "user" {
+                    if let Some(t) = out["message"]["content"].as_str() {
+                        premiere = t.to_string();
                     }
-                    sorties.push(out.to_string());
+                }
+                sorties.push(out.to_string());
+            };
+            if let Some(nouvelles) = s.convertisseur.complet(&source) {
+                for out in nouvelles {
+                    garder(out, &mut sorties);
+                }
+            } else {
+                let avant = s.lu;
+                let (lignes, suite) = lire_depuis(&source, s.lu, &mut s.reste);
+                if suite < avant {
+                    s.cible = None;
+                }
+                s.lu = suite;
+                for l in lignes {
+                    let Ok(v) = serde_json::from_str::<Value>(&l) else { continue };
+                    for out in s.convertisseur.ligne(&v) {
+                        garder(out, &mut sorties);
+                    }
                 }
             }
             if sorties.is_empty() {
@@ -289,6 +334,13 @@ mod essais {
         assert_eq!(commande(&json!(["git", "status"])), "git status");
         assert_eq!(commande(&json!("ls -la")), "ls -la");
         assert_eq!(commande(&json!(null)), "");
+    }
+
+    #[test]
+    fn la_date_en_millisecondes_se_dit_comme_les_transcriptions() {
+        assert_eq!(iso_ms(0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(iso_ms(951_782_400_000), "2000-02-29T00:00:00.000Z");
+        assert_eq!(iso_ms(1_793_370_620_123), "2026-10-30T14:30:20.123Z");
     }
 
     #[test]

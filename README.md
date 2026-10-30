@@ -61,7 +61,7 @@ Invented demo data (a fictional project called "orbite"), reproducible with
 
 ## Download
 
-Prebuilt executables are in the [Releases](../../releases): `Vigie-windows-x64.zip`, `Vigie-linux-x64.tar.gz` and `Vigie-macos-arm64.tar.gz`, each with a `.sha256` file, built by GitHub from the tagged source. They are **unsigned** (a certificate costs money): Windows may show a SmartScreen warning and macOS Gatekeeper may ask you to allow the app (`xattr -d com.apple.quarantine vigie`). Check the download against its `.sha256` file. Linux needs a Vulkan driver, macOS needs Metal. To try it without your own transcripts:
+Prebuilt executables are in the [Releases](../../releases): `Vigie-windows-x64.zip`, `Vigie-linux-x64.tar.gz` and `Vigie-macos-arm64.tar.gz`, each with a `.sha256` file, built by GitHub from the tagged source. They are **unsigned** (a certificate costs money): Windows may show a SmartScreen warning and macOS Gatekeeper may ask you to allow the app (`xattr -d com.apple.quarantine vigie`). Check the download against its `.sha256` file. On Linux and macOS, unpack the archive and run `sh installer.sh` to install for your user only (Linux: `~/.local/bin` plus a menu entry; macOS: `~/Applications/Vigie.app`); `sh installer.sh --desinstaller` removes it. Linux needs a Vulkan driver, macOS needs Metal. To try it without your own transcripts:
 `python demo/generer.py`, then `VIGIE_DONNEES=demo/donnees ./vigie` (PowerShell: `$env:VIGIE_DONNEES="demo\donnees"; cargo run --release`).
 
 ## Privacy

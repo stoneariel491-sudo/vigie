@@ -51,7 +51,8 @@ jobs:
           mkdir -p dist
           cp target/release/vigie dist/vigie
           cp README.md LICENSE dist/
-          tar -C dist -czf "${{ matrix.name }}.tar.gz" vigie README.md LICENSE
+          cp outils/installer.sh assets/vigie-256.png dist/
+          tar -C dist -czf "${{ matrix.name }}.tar.gz" vigie installer.sh vigie-256.png README.md LICENSE
           if command -v sha256sum >/dev/null; then sha256sum "${{ matrix.name }}.tar.gz" > "${{ matrix.name }}.tar.gz.sha256"; else shasum -a 256 "${{ matrix.name }}.tar.gz" > "${{ matrix.name }}.tar.gz.sha256"; fi
       - name: Attach to the release
         shell: bash

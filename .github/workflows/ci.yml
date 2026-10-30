@@ -33,6 +33,23 @@ jobs:
         run: cargo build --release
       - name: Test
         run: cargo test --release
+      - name: Installer round trip (Linux and macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"
+          sh outils/installer.sh
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            test -x "$HOME/Applications/Vigie.app/Contents/MacOS/vigie"
+            test -f "$HOME/Applications/Vigie.app/Contents/Info.plist"
+            plutil -lint "$HOME/Applications/Vigie.app/Contents/Info.plist"
+          else
+            test -x "$HOME/.local/bin/vigie"
+            test -f "$HOME/.local/share/applications/vigie.desktop"
+            test -f "$HOME/.local/share/icons/hicolor/256x256/apps/vigie.png"
+          fi
+          sh outils/installer.sh --desinstaller
+          test ! -e "$HOME/.local/bin/vigie" && test ! -e "$HOME/Applications/Vigie.app"
       - name: Demo data
         shell: bash
         run: |
