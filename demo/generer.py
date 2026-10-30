@@ -158,6 +158,16 @@ IMAGES = {"terrain": terrain(), "reseau": reseau(), "latence": latence(), "chale
           "spectre": spectre(), "ruban": ruban(), "orbites": orbites()}
 
 
+def natif(texte):
+    """Hors de Windows, les chemins de la demonstration sont ceux d'un poste Unix."""
+    if os.name == "nt" and not os.environ.get("DEMO_UNIX"):
+        return texte
+    for nom in ("orbite", "balise"):
+        # Une barre inverse s'ecrit doublee dans le JSON : deux, donc quatre ici.
+        texte = texte.replace("C:\\\\demo\\\\" + nom, "/home/demo/" + nom).replace("C:/demo/" + nom, "/home/demo/" + nom)
+    return texte
+
+
 def stamp(t):
     return t.strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (t.microsecond // 1000)
 
@@ -195,7 +205,7 @@ def ecrire(wf, label, phase, fil):
     d = os.path.join(RACINE, "projects", PROJET, SESSION, "subagents", "workflows", wf)
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "agent-%s.jsonl" % fil.id), "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(json.dumps(l, ensure_ascii=False) for l in fil.lignes) + "\n")
+        f.write(natif("\n".join(json.dumps(l, ensure_ascii=False) for l in fil.lignes) + "\n"))
     with open(os.path.join(d, "agent-%s.meta.json" % fil.id), "w") as f:
         json.dump({"agentType": "workflow-subagent", "description": label, "workflowPhase": phase, "spawnDepth": 1}, f)
     with open(os.path.join(d, "journal.jsonl"), "a") as f:

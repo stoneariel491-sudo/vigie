@@ -60,9 +60,8 @@ Invented demo data (a fictional project called "orbite"), reproducible with
 
 ## Download
 
-A prebuilt, unsigned `Vigie-windows.zip` is in the [Releases](../../releases) (Windows may show a
-SmartScreen warning). To try it without your own transcripts:
-`python demo/generer.py`, then `$env:VIGIE_DONNEES="demo\donnees"; cargo run --release`.
+Prebuilt executables are in the [Releases](../../releases): `Vigie-windows-x64.zip`, `Vigie-linux-x64.tar.gz` and `Vigie-macos-arm64.tar.gz`, each with a `.sha256` file, built by GitHub from the tagged source. They are **unsigned** (a certificate costs money): Windows may show a SmartScreen warning and macOS Gatekeeper may ask you to allow the app (`xattr -d com.apple.quarantine vigie`). Check the download against its `.sha256` file. Linux needs a Vulkan driver, macOS needs Metal. To try it without your own transcripts:
+`python demo/generer.py`, then `VIGIE_DONNEES=demo/donnees ./vigie` (PowerShell: `$env:VIGIE_DONNEES="demo\donnees"; cargo run --release`).
 
 ## Privacy
 
@@ -107,7 +106,7 @@ Unit tests live next to the code (`cargo test`).
 
 ## Honest limits
 
-- **Windows only** for now: installer scripts, window class, mutex and paths are Windows-specific.
+- **Windows is the reference platform.** Linux (x64) and macOS (Apple Silicon) build, pass their tests and render the same frames on GitHub's runners (Mesa/Vulkan and Metal), but nobody has yet used them on a real desktop with a mouse. There the in-app page engine (WebView2) does not exist, so a link's quoted passage is read as text instead; sound plays through `ffplay` (part of ffmpeg) when it is on the `PATH`; there is no installer yet (unpack and run `./vigie`); single-instance and the native dialog guard are Windows-only. Intel Macs and Linux on ARM are not built.
 - Claude Code, Codex CLI and Gemini CLI are read; any other tool needs a new converter in `src/import/` (about 150 lines each).
 - No search or filter over past runs yet; at most 1,000 blocks are kept per thread.
 - A project is inferred from the folders the agents work in, not declared, and two

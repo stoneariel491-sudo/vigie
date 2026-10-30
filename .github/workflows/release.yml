@@ -1,0 +1,62 @@
+name: release
+
+# Builds the executables for a version tag and attaches them, with their SHA-256
+# sums, to the GitHub release of that tag. Public repository, GitHub-hosted
+# standard runners: free. Do not add paid runners here.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach to (for example v0.4.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Vigie-windows-x64
+          - os: ubuntu-latest
+            name: Vigie-linux-x64
+          - os: macos-latest
+            name: Vigie-macos-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Build
+        run: cargo build --release
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/vigie.exe dist/Vigie.exe
+          Compress-Archive -Path dist/Vigie.exe -DestinationPath "${{ matrix.name }}.zip"
+          (Get-FileHash "${{ matrix.name }}.zip" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.name }}.zip" | Out-File -Encoding ascii "${{ matrix.name }}.zip.sha256"
+      - name: Package (Linux and macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          cp target/release/vigie dist/vigie
+          cp README.md LICENSE dist/
+          tar -C dist -czf "${{ matrix.name }}.tar.gz" vigie README.md LICENSE
+          if command -v sha256sum >/dev/null; then sha256sum "${{ matrix.name }}.tar.gz" > "${{ matrix.name }}.tar.gz.sha256"; else shasum -a 256 "${{ matrix.name }}.tar.gz" > "${{ matrix.name }}.tar.gz.sha256"; fi
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Vigie ${TAG#v}" --notes "Unsigned executables, built by GitHub from the source at this tag. Check them against the .sha256 files."
+          gh release upload "$TAG" "${{ matrix.name }}".* --clobber

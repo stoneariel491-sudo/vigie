@@ -463,7 +463,19 @@ pub(crate) fn decalage_horaire_heures() -> i32 {
             let ete = if r == 2 { -60 } else { 0 };
             -(f.biais + ete) / 60
         }
-        #[cfg(not(windows))]
+        #[cfg(unix)]
+        unsafe {
+            // Le decalage de l'heure locale a l'instant present, que la
+            // bibliotheque du systeme tient de la configuration de la machine.
+            let t = libc::time(std::ptr::null_mut());
+            let mut tm: libc::tm = std::mem::zeroed();
+            if libc::localtime_r(&t, &mut tm).is_null() {
+                0
+            } else {
+                (tm.tm_gmtoff / 3600) as i32
+            }
+        }
+        #[cfg(not(any(windows, unix)))]
         {
             0
         }

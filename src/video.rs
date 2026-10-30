@@ -464,15 +464,65 @@ mod son {
     }
 }
 
+/// Le son hors de Windows : `ffplay`, que fournit ffmpeg, joue le fichier a
+/// partir d'une position. Une pause arrete le processus et note ou l'on en
+/// etait ; reprendre le relance de la. Sans ffplay sur le PATH, la vigie reste
+/// muette (l'onde se dessine quand meme), comme avec `VIGIE_MUET`.
 #[cfg(not(windows))]
 mod son {
-    pub struct Son;
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, Command, Stdio};
+    use std::time::Instant;
+
+    pub struct Son {
+        chemin: PathBuf,
+        /// Ou l'on en est, en secondes, quand le processus ne tourne pas.
+        position: f32,
+        joue: Option<(Child, Instant)>,
+    }
+
+    fn lancer(chemin: &Path, depuis: f32) -> Option<Child> {
+        Command::new("ffplay")
+            .args(["-nodisp", "-autoexit", "-loglevel", "quiet", "-vn", "-ss", &format!("{depuis:.3}")])
+            .arg(chemin)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .ok()
+    }
+
     impl Son {
-        pub fn ouvrir(_: &std::path::Path, _: f32) -> Option<Son> {
-            None
+        pub fn ouvrir(chemin: &Path, depuis: f32) -> Option<Son> {
+            // VIGIE_MUET : les captures et les essais ne jouent rien.
+            if std::env::var_os("VIGIE_MUET").is_some() {
+                return None;
+            }
+            let enfant = lancer(chemin, depuis)?;
+            Some(Son { chemin: chemin.to_path_buf(), position: depuis, joue: Some((enfant, Instant::now())) })
         }
-        pub fn pause(&mut self) {}
-        pub fn reprendre(&mut self) {}
+
+        pub fn pause(&mut self) {
+            if let Some((mut enfant, depuis)) = self.joue.take() {
+                self.position += depuis.elapsed().as_secs_f32();
+                let _ = enfant.kill();
+                let _ = enfant.wait();
+            }
+        }
+
+        pub fn reprendre(&mut self) {
+            if self.joue.is_none() {
+                if let Some(enfant) = lancer(&self.chemin, self.position) {
+                    self.joue = Some((enfant, Instant::now()));
+                }
+            }
+        }
+    }
+
+    impl Drop for Son {
+        fn drop(&mut self) {
+            self.pause();
+        }
     }
 }
 
