@@ -61,7 +61,7 @@ Invented demo data (a fictional project called "orbite"), reproducible with
 
 ## Download
 
-Prebuilt executables are in the [Releases](../../releases): `Vigie-windows-x64.zip`, `Vigie-linux-x64.tar.gz` and `Vigie-macos-arm64.tar.gz`, each with a `.sha256` file, built by GitHub from the tagged source. They are **unsigned** (a certificate costs money): Windows may show a SmartScreen warning and macOS Gatekeeper may ask you to allow the app (`xattr -d com.apple.quarantine vigie`). Check the download against its `.sha256` file. On Linux and macOS, unpack the archive and run `sh installer.sh` to install for your user only (Linux: `~/.local/bin` plus a menu entry; macOS: `~/Applications/Vigie.app`); `sh installer.sh --desinstaller` removes it. Linux needs a Vulkan driver, macOS needs Metal. To try it without your own transcripts:
+Prebuilt executables are in the [Releases](../../releases): `Vigie-windows-x64.zip`, `Vigie-linux-x64.tar.gz` and `Vigie-macos-arm64.tar.gz`, each with a `.sha256` file, built by GitHub from the tagged source. They are **unsigned** (a certificate costs money): Windows may show a SmartScreen warning and macOS Gatekeeper may ask you to allow the app (`xattr -d com.apple.quarantine vigie`). Check the download against its `.sha256` file. On Linux and macOS, unpack the archive and run `sh installer.sh` to install for your user only (Linux: `~/.local/bin` plus a menu entry; macOS: `~/Applications/Vigie.app`); `sh installer.sh --desinstaller` removes it. Linux needs a Vulkan driver, macOS needs Metal. To try it without your own transcripts (clone the repository first; Python 3 with `pillow` and `numpy` is needed to generate the demo data, `pip install pillow numpy`):
 `python demo/generer.py`, then `VIGIE_DONNEES=demo/donnees ./vigie` (PowerShell: `$env:VIGIE_DONNEES="demo\donnees"; cargo run --release`).
 
 ## Privacy
@@ -73,6 +73,8 @@ on a link**: one GET without cookies or scripts to the address you clicked; if y
 it loads in an isolated engine whose whole traffic goes through a local proxy that refuses
 private addresses. `src/reseau.rs`, `src/mandataire.rs` and `src/navigateur.rs` are the only
 modules that touch the network.
+
+To follow the other tools, Vigie writes a translated copy of their transcripts under its own state folder (`%APPDATA%\Vigie\import` on Windows, `~/Library/Application Support/Vigie/import` on macOS, `~/.local/share/vigie/import` on Linux). The copy stays on your machine and holds the same text as the originals, including anything sensitive in them: delete the folder whenever you like, or set `VIGIE_SANS_IMPORT=1` to turn the import off.
 
 ## Run it
 
@@ -117,7 +119,8 @@ Unit tests live next to the code (`cargo test`).
 
 ## Honest limits
 
-- **Windows is the reference platform.** Linux (x64) and macOS (Apple Silicon) build, pass their tests and render the same frames on GitHub's runners (Mesa/Vulkan and Metal), but nobody has yet used them on a real desktop with a mouse. There the in-app page engine (WebView2) does not exist, so a link's quoted passage is read as text instead; sound plays through `ffplay` (part of ffmpeg) when it is on the `PATH`; the installer (`installer.sh`) installs for the current user only, and its install and uninstall are checked on GitHub's runners, not on a real desktop; single-instance and the native dialog guard are Windows-only. Intel Macs and Linux on ARM are not built.
+- **Windows is the reference platform.** Linux (x64) and macOS (Apple Silicon) build, pass their tests and render the same frames on GitHub's runners (Mesa/Vulkan and Metal), but nobody has yet used them on a real desktop with a mouse. There the in-app page engine (WebView2) does not exist, so a link's quoted passage is read as text instead, and "open elsewhere" hands the link to your system browser (`open` or `xdg-open`); sound plays through `ffplay` (part of ffmpeg) when it is on the `PATH`; the installer (`installer.sh`) installs for the current user only, and its install and uninstall are checked on GitHub's runners, not on a real desktop; single-instance and the native dialog guard are Windows-only. Intel Macs and Linux on ARM are not built.
+- **The interface is in French for now** (labels such as "Projets", "en cours", "image reçue"); the screenshots show it, and nothing is translated yet.
 - Claude Code, Codex CLI, Gemini CLI, OpenCode and Cursor are read; the Cursor reader is experimental (its format is barely documented), and none of these formats is stable across tool versions. Any other tool needs a new converter in `src/import/` (about 150 lines each).
 - No search or filter over past runs yet; at most 1,000 blocks are kept per thread.
 - A project is inferred from the folders the agents work in, not declared, and two

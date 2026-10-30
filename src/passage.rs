@@ -178,6 +178,19 @@ pub enum Classe {
     Refuse(String),
 }
 
+/// La commande qui ouvre une adresse dans le navigateur du systeme : un
+/// programme et ses arguments, sans interpreteur de commandes, donc sans que
+/// l'adresse puisse y etre lue comme une commande. L'adresse est UN argument.
+pub fn commande_d_ouverture(url: &str) -> (&'static str, Vec<String>) {
+    if cfg!(windows) {
+        ("rundll32.exe", vec!["url.dll,FileProtocolHandler".to_string(), url.to_string()])
+    } else if cfg!(target_os = "macos") {
+        ("open", vec![url.to_string()])
+    } else {
+        ("xdg-open", vec![url.to_string()])
+    }
+}
+
 pub fn classer(url: &str) -> Classe {
     let bas = url.to_ascii_lowercase();
     if let Some(sch) = ["javascript", "data", "file", "ftp", "blob"].iter().find(|s| bas.starts_with(&format!("{s}:"))) {
@@ -1032,4 +1045,18 @@ mod essais {
         assert!(a.contains("#:~:text="));
     }
 
+    #[test]
+    fn l_adresse_s_ouvre_comme_un_seul_argument_du_programme_du_systeme() {
+        let url = "https://exemple.org/a b?x=1&y=2;ls";
+        let (programme, arguments) = commande_d_ouverture(url);
+        assert!(["rundll32.exe", "open", "xdg-open"].contains(&programme));
+        assert_eq!(arguments.last().map(String::as_str), Some(url), "l'adresse est un argument, tel quel");
+        if cfg!(windows) {
+            assert_eq!(programme, "rundll32.exe");
+        } else if cfg!(target_os = "macos") {
+            assert_eq!((programme, arguments.len()), ("open", 1));
+        } else {
+            assert_eq!((programme, arguments.len()), ("xdg-open", 1));
+        }
+    }
 }

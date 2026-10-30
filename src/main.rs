@@ -2175,7 +2175,8 @@ impl Vigie {
                 // navigateur du systeme : sans interpreteur de commandes, donc
                 // sans que l'adresse puisse y etre lue comme une commande.
                 if matches!(passage::classer(&p.url), passage::Classe::Web | passage::Classe::NonChiffre) {
-                    let _ = std::process::Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", p.url.as_str()]).spawn();
+                    let (programme, arguments) = passage::commande_d_ouverture(&p.url);
+                    let _ = std::process::Command::new(programme).args(arguments).spawn();
                 }
             }
         }
