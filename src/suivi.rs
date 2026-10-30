@@ -301,15 +301,20 @@ pub enum Choix {
     Agent { chantier: String, agent: String },
 }
 
-/// Le dossier des projets de l'outil.
-pub(crate) fn projets() -> PathBuf {
+/// Les dossiers de projets a lire : celui de Claude Code, puis celui des
+/// transcriptions que `import` a remises a son format (Codex, Gemini...).
+pub(crate) fn racines() -> Vec<PathBuf> {
     if let Some(f) = crate::app::figee() {
-        return f.join("projects");
+        return vec![f.join("projects")];
     }
     let base = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .unwrap_or_default();
-    Path::new(&base).join(".claude").join("projects")
+    let mut v = vec![Path::new(&base).join(".claude").join("projects")];
+    if let Some(i) = crate::import::racine() {
+        v.push(i);
+    }
+    v
 }
 
 /// Le chantier le plus recemment touche, TOUTES SESSIONS CONFONDUES.
@@ -335,7 +340,7 @@ fn dernier_chantier() -> Option<PathBuf> {
         }
     }
     let mut v: Vec<(std::time::SystemTime, PathBuf)> = Vec::new();
-    if let Ok(liste_projets) = std::fs::read_dir(projets()) {
+    for liste_projets in racines().iter().filter_map(|r| std::fs::read_dir(r).ok()) {
         for projet in liste_projets.filter_map(|e| e.ok()) {
             let Ok(sessions) = std::fs::read_dir(projet.path()) else {
                 continue;

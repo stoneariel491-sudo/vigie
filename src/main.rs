@@ -24,6 +24,7 @@
 mod app;
 mod catalogue;
 mod chantier;
+mod import;
 mod dates;
 mod formes;
 mod images;
@@ -5109,6 +5110,7 @@ fn main() {
     // Vingt entrees en arriere : assez pour raccrocher le fil, pas assez pour
     // noyer l'arrivee sous la consigne, qui fait des milliers de lignes.
     suivi::lancer(envoi.clone(), recois_choix, choix.clone(), 20);
+    import::lancer();
     chantier::lancer(envoi.clone(), recois_fiche);
     catalogue::lancer(envoi);
 

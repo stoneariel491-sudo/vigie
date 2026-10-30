@@ -50,6 +50,7 @@ Invented demo data (a fictional project called "orbite"), reproducible with
   (`ureq` + rustls, no cookies, no scripts). Private and local addresses are refused *at DNS
   resolution time*, through a custom resolver, so a name that changes its answer between check
   and use (DNS rebinding) does not get through.
+- **Reads more than one tool.** Besides Claude Code, Vigie follows [Codex CLI](https://github.com/openai/codex) (`~/.codex/sessions`) and Gemini CLI (`~/.gemini/tmp/*/chats`). Each tool has a smallconverter (`src/import/`) that rewrites its transcript in the format the rest of the app already follows, so a sessionshows up like any other run. These formats are not stable or officially documented: the converters follow their publicdescriptions and are tested on sample transcripts, not on every version of the tools. A line they do not understand isskipped, never fatal. `VIGIE_SANS_IMPORT=1` turns the import off.
 - **Zoomable images, audio waveforms and links.** Images zoom like on a Mac; sounds play with
   their waveform; a cited page opens in an isolated engine with the quoted passage highlighted.
 - **Behaves like an installed app.** Single instance (a named mutex; a second launch brings
@@ -107,7 +108,7 @@ Unit tests live next to the code (`cargo test`).
 ## Honest limits
 
 - **Windows only** for now: installer scripts, window class, mutex and paths are Windows-specific.
-- It reads one tool's transcript format; a different agent tool would need a new reader.
+- Claude Code, Codex CLI and Gemini CLI are read; any other tool needs a new converter in `src/import/` (about 150 lines each).
 - No search or filter over past runs yet; at most 1,000 blocks are kept per thread.
 - A project is inferred from the folders the agents work in, not declared, and two
   repositories with the same name share a tab.

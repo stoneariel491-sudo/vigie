@@ -39,11 +39,26 @@ pub fn maintenant() -> std::time::SystemTime {
     }
 }
 
+/// Ou une application garde son etat : `%APPDATA%\Vigie` sous Windows,
+/// `~/Library/Application Support/Vigie` sous macOS, `$XDG_DATA_HOME/vigie`
+/// (ou `~/.local/share/vigie`) ailleurs.
+fn dossier_d_etat() -> Option<PathBuf> {
+    if cfg!(windows) {
+        return Some(PathBuf::from(std::env::var_os("APPDATA")?).join("Vigie"));
+    }
+    let maison = PathBuf::from(std::env::var_os("HOME")?);
+    if cfg!(target_os = "macos") {
+        return Some(maison.join("Library").join("Application Support").join("Vigie"));
+    }
+    let base = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(|| maison.join(".local").join("share"));
+    Some(base.join("vigie"))
+}
+
 /// Le dossier des donnees de la vigie, cree au besoin.
 pub fn donnees() -> Option<PathBuf> {
     let d = match figee() {
         Some(f) => f.join("vigie"),
-        None => PathBuf::from(std::env::var("APPDATA").ok()?).join("Vigie"),
+        None => dossier_d_etat()?,
     };
     std::fs::create_dir_all(&d).ok()?;
     Some(d)

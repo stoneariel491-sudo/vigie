@@ -442,7 +442,7 @@ fn entrees(d: &Path) -> Vec<std::fs::DirEntry> {
 /// Le dossier d'un chantier, d'apres son identifiant, sous n'importe quelle
 /// session de n'importe quel projet.
 pub fn dossier_du_chantier(id: &str) -> Option<PathBuf> {
-    for projet in entrees(&crate::suivi::projets()) {
+    for projet in crate::suivi::racines().iter().flat_map(|r| entrees(r)) {
         for session in entrees(&projet.path()) {
             let d = session.path().join("subagents").join("workflows").join(id);
             if d.is_dir() {
@@ -648,7 +648,7 @@ fn agents_et_activite(dossier: &Path) -> (Vec<PathBuf>, Option<SystemTime>) {
 fn inventaire() -> (Vec<Trouve>, HashMap<String, PathBuf>) {
     let mut trouves = Vec::new();
     let mut scripts = HashMap::new();
-    for projet in entrees(&crate::suivi::projets()) {
+    for projet in crate::suivi::racines().iter().flat_map(|r| entrees(r)) {
         for session in entrees(&projet.path()) {
             let s = session.path();
             for f in entrees(&s.join("workflows").join("scripts")) {
