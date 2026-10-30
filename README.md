@@ -1,7 +1,7 @@
 # Vigie
 
-> **En bref (français).** Vigie est une application Windows native, écrite en Rust et rendue
-> sur le GPU, qui affiche en direct ce que font des agents de code pendant qu'ils travaillent :
+> **En bref (français).** Vigie est une application de bureau native (Windows, Linux, macOS),
+> écrite en Rust et rendue sur le GPU, qui affiche en direct ce que font des agents de code pendant qu'ils travaillent :
 > ce qu'ils pensent, ce qu'ils disent, les commandes qu'ils lancent et les images ou vidéos
 > qu'ils produisent. La documentation complète, en français, est dans
 > [`LISEZ-MOI.md`](LISEZ-MOI.md).
@@ -51,7 +51,7 @@ Invented demo data (a fictional project called "orbite"), reproducible with
   resolution time*, through a custom resolver, so a name that changes its answer between check
   and use (DNS rebinding) does not get through.
 - **Works without workflows.** Ordinary Claude Code sessions (`~/.claude/projects/<project>/<id>.jsonl`) show up as runs too, so you do not need to use workflows to see anything. A running workflow still takes the Direct view over an ordinary session.
-- **Reads more than one tool.** Besides Claude Code, Vigie follows [Codex CLI](https://github.com/openai/codex) (`~/.codex/sessions`) and Gemini CLI (`~/.gemini/tmp/*/chats`). Each tool has a small converter (`src/import/`) that rewrites its transcript in the format the rest of the app already follows, so a session shows up like any other run. These formats are not stable or officially documented: the converters follow their public descriptions and are tested on sample transcripts, not on every version of the tools. A line they do not understand is skipped, never fatal. `VIGIE_SANS_IMPORT=1` turns the import off.
+- **Reads more than one tool.** Besides Claude Code, Vigie follows [Codex CLI](https://github.com/openai/codex) (`~/.codex/sessions`), Gemini CLI (`~/.gemini/tmp/*/chats`), OpenCode (`~/.local/share/opencode/storage`) and Cursor's agent (`~/.cursor/projects/*/agent-transcripts`; its format is barely documented, so that reader is experimental and gives every line the file's date). Each tool has a small converter (`src/import/`) that rewrites its transcript in the format the rest of the app already follows, so a session shows up like any other run. These formats are not stable or officially documented: the converters follow their public descriptions and are tested on sample transcripts, not on every version of the tools. A line they do not understand is skipped, never fatal. `VIGIE_SANS_IMPORT=1` turns the import off.
 - **Zoomable images, audio waveforms and links.** Images zoom like on a Mac; sounds play with
   their waveform; a cited page opens in an isolated engine with the quoted passage highlighted.
 - **Behaves like an installed app.** Single instance (a named mutex; a second launch brings
@@ -76,14 +76,24 @@ modules that touch the network.
 
 ## Run it
 
-Requirements: Windows 10/11, a GPU with a Vulkan or DirectX 12 driver, a Rust toolchain
-(stable, MSVC). Optional: `ffmpeg` and `ffprobe` on the `PATH` for video thumbnails.
+Requirements: Windows 10/11, Linux (x64) or macOS (Apple Silicon); a GPU with a Vulkan driver
+(Linux), Metal (macOS) or Vulkan / DirectX 12 (Windows); a Rust toolchain (stable) only if you build from
+source. Optional: `ffmpeg` and `ffprobe` on the `PATH` for video thumbnails, and `ffplay` for sound on
+Linux and macOS.
 
 ```powershell
 cargo run --release                 # open the live view
 cargo run --release -- --essai      # known glyphs and a test image instead of the live feed
 .\outils\installer.ps1              # install for the current user (no admin rights)
 .\outils\desinstaller.ps1           # remove what the installer added
+```
+
+On Linux and macOS:
+
+```sh
+cargo run --release                 # open the live view
+sh outils/installer.sh              # install for the current user (no root)
+sh outils/installer.sh --desinstaller   # remove it
 ```
 
 `--capture=out.png` renders one frame to a file and exits; together with `--clic`,
@@ -107,8 +117,8 @@ Unit tests live next to the code (`cargo test`).
 
 ## Honest limits
 
-- **Windows is the reference platform.** Linux (x64) and macOS (Apple Silicon) build, pass their tests and render the same frames on GitHub's runners (Mesa/Vulkan and Metal), but nobody has yet used them on a real desktop with a mouse. There the in-app page engine (WebView2) does not exist, so a link's quoted passage is read as text instead; sound plays through `ffplay` (part of ffmpeg) when it is on the `PATH`; there is no installer yet (unpack and run `./vigie`); single-instance and the native dialog guard are Windows-only. Intel Macs and Linux on ARM are not built.
-- Claude Code, Codex CLI and Gemini CLI are read; any other tool needs a new converter in `src/import/` (about 150 lines each).
+- **Windows is the reference platform.** Linux (x64) and macOS (Apple Silicon) build, pass their tests and render the same frames on GitHub's runners (Mesa/Vulkan and Metal), but nobody has yet used them on a real desktop with a mouse. There the in-app page engine (WebView2) does not exist, so a link's quoted passage is read as text instead; sound plays through `ffplay` (part of ffmpeg) when it is on the `PATH`; the installer (`installer.sh`) installs for the current user only, and its install and uninstall are checked on GitHub's runners, not on a real desktop; single-instance and the native dialog guard are Windows-only. Intel Macs and Linux on ARM are not built.
+- Claude Code, Codex CLI, Gemini CLI, OpenCode and Cursor are read; the Cursor reader is experimental (its format is barely documented), and none of these formats is stable across tool versions. Any other tool needs a new converter in `src/import/` (about 150 lines each).
 - No search or filter over past runs yet; at most 1,000 blocks are kept per thread.
 - A project is inferred from the folders the agents work in, not declared, and two
   repositories with the same name share a tab.
